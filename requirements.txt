@@ -8,4 +8,4 @@ schedule==0.6.0
 toml==0.10.0
 requests==2.22.0
 argon2-cffi
-danmu_abc==0.1.2
+danmu_abc==0.1.3
