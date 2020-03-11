@@ -2,32 +2,51 @@
 README：https://github.com/yichahucha/surge/tree/master
  */
 
-const $tool = tool()
-const $base64 = new Base64()
+const $tool = new Tool()
 const consoleLog = false
 const url = $request.url
-const body = $response.body
 const path1 = "/amdc/mobileDispatch"
 const path2 = "/gw/mtop.taobao.detail.getdetail"
 
 if (url.indexOf(path1) != -1) {
-    let obj = JSON.parse($base64.decode(body))
-    let dns = obj.dns
-    if (dns && dns.length > 0) {
-        let i = dns.length;
-        while (i--) {
-            const element = dns[i];
-            let host = "trade-acs.m.taobao.com"
-            if (element.host == host) {
-                element.ips = []
-                if (consoleLog) console.log(JSON.stringify(element))
+    if ($tool.isResponse) {
+        const $base64 = new Base64()
+        let body = $response.body
+        let obj = JSON.parse($base64.decode(body))
+        let dns = obj.dns
+        if (dns && dns.length > 0) {
+            let i = dns.length;
+            while (i--) {
+                const element = dns[i];
+                let host = "trade-acs.m.taobao.com"
+                if (element.host == host) {
+                    element.ips = []
+                    if (consoleLog) console.log(JSON.stringify(element))
+                }
             }
         }
+        body = $base64.encode(JSON.stringify(obj))
+        $done({ body })
+    } else {
+        let body = $request.body
+        let json = Qs2Json(body)
+        let domain = json.domain.split(" ")
+        let i = domain.length;
+        while (i--) {
+            const block = "trade-acs.m.taobao.com"
+            const element = domain[i];
+            if (element == block) {
+                domain.splice(i, 1);
+            }
+        }
+        json.domain = domain.join(" ")
+        body = Json2Qs(json)
+        $done({ body })
     }
-    $done({ body: $base64.encode(JSON.stringify(obj)) })
 }
 
 if (url.indexOf(path2) != -1) {
+    const body = $response.body
     $done({ body })
     const obj = JSON.parse(body)
     let item = obj.data.item
@@ -114,7 +133,7 @@ function historySummary(single) {
 }
 
 function difference(currentPrice, price) {
-    let difference = strip(currentPrice - price)
+    let difference = sub(currentPrice, price)
     if (difference == 0) {
         return "-"
     } else {
@@ -122,8 +141,18 @@ function difference(currentPrice, price) {
     }
 }
 
-function strip(num, precision = 12) {
-    return +parseFloat(num.toPrecision(precision));
+function sub(arg1, arg2) {
+    return add(arg1, -Number(arg2), arguments[2]);
+}
+
+function add(arg1, arg2) {
+    arg1 = arg1.toString(), arg2 = arg2.toString();
+    var arg1Arr = arg1.split("."), arg2Arr = arg2.split("."), d1 = arg1Arr.length == 2 ? arg1Arr[1] : "", d2 = arg2Arr.length == 2 ? arg2Arr[1] : "";
+    var maxLen = Math.max(d1.length, d2.length);
+    var m = Math.pow(10, maxLen);
+    var result = Number(((arg1 * m + arg2 * m) / m).toFixed(maxLen));
+    var d = arguments[2];
+    return typeof d === "number" ? Number((result).toFixed(d)) : result;
 }
 
 function requestPrice(share_url, callback) {
@@ -138,10 +167,10 @@ function requestPrice(share_url, callback) {
     $tool.post(options, function (error, response, data) {
         if (!error) {
             callback(JSON.parse(data));
-            if (consolelog) console.log("Data:\n" + data);
+            if (consoleLog) console.log("Data:\n" + data);
         } else {
             callback(null, null);
-            if (consolelog) console.log("Error:\n" + error);
+            if (consoleLog) console.log("Error:\n" + error);
         }
     })
 }
@@ -151,6 +180,28 @@ function dateFormat(cellval) {
     const month = date.getMonth() + 1 < 10 ? "0" + (date.getMonth() + 1) : date.getMonth() + 1;
     const currentDate = date.getDate() < 10 ? "0" + date.getDate() : date.getDate();
     return date.getFullYear() + "-" + month + "-" + currentDate;
+}
+
+function Qs2Json(url) {
+    var search = url.substring(url.lastIndexOf("?") + 1);
+    var obj = {};
+    var reg = /([^?&=]+)=([^?&=]*)/g;
+    search.replace(reg, function (rs, $1, $2) {
+        var name = decodeURIComponent($1);
+        var val = decodeURIComponent($2);
+        val = String(val);
+        obj[name] = val;
+        return rs;
+    });
+    return obj;
+}
+
+function Json2Qs(json) {
+    var temp = [];
+    for (var k in json) {
+        temp.push(k + "=" + json[k]);
+    }
+    return temp.join("&");
 }
 
 Array.prototype.insert = function (index, item) {
@@ -186,44 +237,61 @@ Date.prototype.format = function (fmt) {
     return fmt;
 }
 
-function tool() {
-    const isSurge = typeof $httpClient != "undefined"
-    const isQuanX = typeof $task != "undefined"
-    const notify = (title, subtitle, message) => {
-        if (isQuanX) $notify(title, subtitle, message)
-        if (isSurge) $notification.post(title, subtitle, message)
+function Tool() {
+    _node = (() => {
+        if (typeof require == "function") {
+            const request = require('request')
+            return ({ request })
+        } else {
+            return (null)
+        }
+    })()
+    _isSurge = typeof $httpClient != "undefined"
+    _isQuanX = typeof $task != "undefined"
+    this.isSurge = _isSurge
+    this.isQuanX = _isQuanX
+    this.isResponse = typeof $response != "undefined"
+    this.notify = (title, subtitle, message) => {
+        if (_isQuanX) $notify(title, subtitle, message)
+        if (_isSurge) $notification.post(title, subtitle, message)
+        if (_node) console.log(JSON.stringify({ title, subtitle, message }));
     }
-    const setCache = (value, key) => {
-        if (isQuanX) return $prefs.setValueForKey(value, key)
-        if (isSurge) return $persistentStore.write(value, key)
+    this.write = (value, key) => {
+        if (_isQuanX) return $prefs.setValueForKey(value, key)
+        if (_isSurge) return $persistentStore.write(value, key)
     }
-    const getCache = (key) => {
-        if (isQuanX) return $prefs.valueForKey(key)
-        if (isSurge) return $persistentStore.read(key)
+    this.read = (key) => {
+        if (_isQuanX) return $prefs.valueForKey(key)
+        if (_isSurge) return $persistentStore.read(key)
     }
-    const get = (options, callback) => {
-        if (isQuanX) {
+    this.get = (options, callback) => {
+        if (_isQuanX) {
             if (typeof options == "string") options = { url: options }
             options["method"] = "GET"
-            $task.fetch(options).then(response => {
-                response["status"] = response.statusCode
-                callback(null, response, response.body)
-            }, reason => callback(reason.error, null, null))
+            $task.fetch(options).then(response => { callback(null, _status(response), response.body) }, reason => callback(reason.error, null, null))
         }
-        if (isSurge) $httpClient.get(options, callback)
+        if (_isSurge) $httpClient.get(options, (error, response, body) => { callback(error, _status(response), body) })
+        if (_node) _node.request(options, (error, response, body) => { callback(error, _status(response), body) })
     }
-    const post = (options, callback) => {
-        if (isQuanX) {
+    this.post = (options, callback) => {
+        if (_isQuanX) {
             if (typeof options == "string") options = { url: options }
             options["method"] = "POST"
-            $task.fetch(options).then(response => {
-                response["status"] = response.statusCode
-                callback(null, response, response.body)
-            }, reason => callback(reason.error, null, null))
+            $task.fetch(options).then(response => { callback(null, _status(response), response.body) }, reason => callback(reason.error, null, null))
         }
-        if (isSurge) $httpClient.post(options, callback)
+        if (_isSurge) $httpClient.post(options, (error, response, body) => { callback(error, _status(response), body) })
+        if (_node) _node.request.post(options, (error, response, body) => { callback(error, _status(response), body) })
     }
-    return { isQuanX, isSurge, notify, setCache, getCache, get, post }
+    _status = (response) => {
+        if (response) {
+            if (response.status) {
+                response["statusCode"] = response.status
+            } else if (response.statusCode) {
+                response["status"] = response.statusCode
+            }
+        }
+        return response
+    }
 }
 
 function Base64() {
