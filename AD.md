@@ -18,9 +18,6 @@ EasyPrivacy : EasyPrivacy 是隐私保护，不被跟踪<br>
 CJX's Annoyance List : 过滤烦人的自我推广，并补充 EasyPrivacy 隐私规则<br>
 链接：https://raw.githubusercontent.com/cjx82630/cjxlist/master/cjx-annoyance.txt
 
-CJX’s Annoyance List (去自推列表)<br>
-链接：https://gitee.com/cjx82630/cjxlist/raw/master/cjx-annoyance.txt
-
 乘风广告过滤&视频过滤<br>
 链接：https://gitee.com/xinggsf/Adblock-Rule/raw/master/rule.txt<br>
 链接：https://gitee.com/xinggsf/Adblock-Rule/raw/master/mv.txt
