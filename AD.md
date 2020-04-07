@@ -32,7 +32,8 @@
 + I don't care about cookies : 我不关心 Cookie 的问题，屏蔽网站的 cookies 相关的警告<br>
 地址：https://www.i-dont-care-about-cookies.eu/abp/
 
-
++ Adguard Simplified Domain Names Filter<br>
+地址：https://adguardteam.github.io/AdGuardSDNSFilter/Filters/filter.txt
 
 
 
