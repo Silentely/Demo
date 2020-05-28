@@ -1,5 +1,5 @@
-||ocsp.int-x3.letsencrypt.org
-||ocsp.apple.com
-||world-gen.g.aaplimg.com
-||mesu.apple.com
-||gdmf.apple.com
+||ocsp.int-x3.letsencrypt.org^
+||ocsp.apple.com^
+||world-gen.g.aaplimg.com^
+||mesu.apple.com^
+||gdmf.apple.com^
