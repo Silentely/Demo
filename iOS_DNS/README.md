@@ -1,8 +1,8 @@
-# encrypted-dns-configs
-Configuration profiles for [DNS over HTTPS](https://en.wikipedia.org/wiki/DNS_over_HTTPS) and [DNS over TLS](https://en.wikipedia.org/wiki/DNS_over_TLS).
+# 加密的DNS配置
+[HTTPS](https://en.wikipedia.org/wiki/DNS_over_HTTPS)上的DNS和[TLS](https://en.wikipedia.org/wiki/DNS_over_TLS)上的DNS的配置文件
 
-## Installation
+## 安装
 
-To make settings work across all apps in iOS & MacOS, you’ll need to install configuration profile. This profile would tell operating system to use DOH / DOT. Note: it’s not enough to simply set server IPs in System Preferences — you need to install a profile.
+要使设置适用于iOS和MacOS中的所有应用，您需要安装配置文件。 此配置文件将告诉操作系统使用DOH / DOT。 注意：仅在“系统偏好设置”中设置服务器IP是不够的-您需要安装配置文件。
 
-On iOS, after installation, go to system **Settings => General => Profile**, select downloaded profile and click “Install” button.
+在iOS上，安装后，转到系统设置=>常规=>配置文件，选择下载的配置文件，然后单击“安装”按钮。
