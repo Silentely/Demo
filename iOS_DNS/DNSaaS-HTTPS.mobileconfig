@@ -17,7 +17,7 @@
 			<key>PayloadDisplayName</key>
 			<string>DNSaaS over HTTPS</string>
 			<key>PayloadIdentifier</key>
-			<string>https.dnspod.dnsSettings.managed</string>
+			<string>https.dnsaas.dnsSettings.managed</string>
 			<key>PayloadType</key>
 			<string>com.apple.dnsSettings.managed</string>
 			<key>PayloadUUID</key>
@@ -31,9 +31,9 @@
 	<key>PayloadDescription</key>
 	<string>Adds the DNSaaS to Big Sur and iOS 14 based systems</string>
 	<key>PayloadDisplayName</key>
-	<string>DNSPod over HTTPS</string>
+	<string>DNSaaS over HTTPS</string>
 	<key>PayloadIdentifier</key>
-	<string>https.dnspod.apple-dns</string>
+	<string>https.dnsaas.apple-dns</string>
 	<key>PayloadRemovalDisallowed</key>
 	<false/>
 	<key>PayloadType</key>
