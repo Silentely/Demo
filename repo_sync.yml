@@ -25,7 +25,7 @@ jobs:
         if: env.PAT
         with:
           source_repo: "https://github.com/sazs34/MyActions.git" # 需要同步的对方仓库
-          source_branch: "master" # 要同步的源分支
+          source_branch: "master" # 同步源分支
           destination_branch: "main" # 同步目的分支
           github_token: ${{ secrets.PAT || github.event.client_payload.PAT }}
 
