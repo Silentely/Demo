@@ -1,0 +1,41 @@
+# File: .github/workflows/repo-sync.yml
+name: sync-sazs34-scripts #随便起 ac名字
+on:
+  schedule:
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+  watch:
+    types: started
+  repository_dispatch:
+    types: sync-sazs34-scripts #随便起 ac名字
+jobs:
+  repo-sync:
+    env:
+      PAT: ${{ secrets.PAT || github.event.client_payload.PAT }} #此处PAT需要申请，教程详见：https://www.jianshu.com/p/bb82b3ad1d11
+      dst_key: ${{ secrets.GITEE_PRIVATE_KEY }} # gitee 私钥 我自己同步到gitee使用，其他人可忽略
+    runs-on: ubuntu-latest
+    if: github.event.repository.owner.id == github.event.sender.id
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
+
+      - name: sync sazs34-scripts # 任务名
+        uses: repo-sync/github-sync@v2
+        if: env.PAT
+        with:
+          source_repo: "https://github.com/sazs34/MyActions.git" # 需要同步的对方仓库
+          source_branch: "master" # 要同步的源分支
+          destination_branch: "main" # 同步目的分支
+          github_token: ${{ secrets.PAT || github.event.client_payload.PAT }}
+
+      # 我自己同步到gitee使用，其他人可忽略
+      - name: sync github -> gitee # 任务名 也可反向
+        uses: Yikun/hub-mirror-action@master
+        if: env.dst_key
+        with:
+          src: github/lxk0301 # 同步源账户名
+          dst: gitee/lxk0301 # 同步目的账户名
+          static_list: "jd_scripts" # 需要同步的仓库 注释则同步全部仓库
+          dst_key: ${{ secrets.GITEE_PRIVATE_KEY }} # gitee 私钥 https://gitee.com/profile/sshkeys
+          dst_token: ${{ secrets.GITEE_TOKEN }} # 创建仓库的API tokens， 用于自动创建不存在的仓库，https://gitee.com/profile/personal_access_tokens
