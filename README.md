@@ -6,7 +6,9 @@
 #### CDN加速类
 + [Github CDN加速1](https://raw.staticdn.net)<br>
 + [Github CDN加速2](https://statically.io)<br>
-+ [图床CDN加速](https://i.staticdn.net)
++ [Github CDN加速3](https://raw.fastgit.org/)<br>
++ [图床CDN加速](https://i.staticdn.net)<br>
+
 
 #### Github下载类 
 + [Github 文件加速1](https://shrill-pond-3e81.hunsh.workers.dev)<br>
