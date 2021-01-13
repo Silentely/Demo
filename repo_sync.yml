@@ -1,5 +1,5 @@
 # File: .github/workflows/repo-sync.yml
-name: sync-sazs34-scripts #随便起 ac名字
+name: sync-sazs34-scripts # 随便起 ac名字
 on:
   schedule:
     - cron: '0 19 * * *'
@@ -7,12 +7,13 @@ on:
   watch:
     types: started
   repository_dispatch:
-    types: sync-sazs34-scripts #随便起 ac名字
+    types: sync-sazs34-scripts # 随便起 ac名字
 jobs:
   repo-sync:
     env:
-      PAT: ${{ secrets.PAT || github.event.client_payload.PAT }} #此处PAT需要申请，教程详见：https://www.jianshu.com/p/bb82b3ad1d11
+      PAT: ${{ github.event.client_payload.PAT || secrets.PAT }} # 此处PAT需要申请，教程详见：https://www.jianshu.com/p/bb82b3ad1d11
       dst_key: ${{ secrets.GITEE_PRIVATE_KEY }} # gitee 私钥 我自己同步到gitee使用，其他人可忽略
+      dst_token: ${{ secrets.GITEE_TOKEN }} # 创建仓库的API tokens
     runs-on: ubuntu-latest
     if: github.event.repository.owner.id == github.event.sender.id
     steps:
@@ -27,7 +28,7 @@ jobs:
           source_repo: "https://github.com/sazs34/MyActions.git" # 需要同步的对方仓库
           source_branch: "master" # 同步目标源分支
           destination_branch: "main" # 将目标源分支同步到本仓库的目的分支
-          github_token: ${{ secrets.PAT || github.event.client_payload.PAT }}
+          github_token: ${{ github.event.client_payload.PAT || secrets.PAT }}
 
       # 我自己同步到gitee使用，其他人可忽略
       - name: sync github -> gitee # 任务名 也可反向
