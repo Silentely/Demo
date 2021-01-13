@@ -25,8 +25,8 @@ jobs:
         if: env.PAT
         with:
           source_repo: "https://github.com/sazs34/MyActions.git" # 需要同步的对方仓库
-          source_branch: "master" # 同步源分支
-          destination_branch: "main" # 同步目的分支
+          source_branch: "master" # 同步目标源分支
+          destination_branch: "main" # 将目标源分支同步到本仓库的目的分支
           github_token: ${{ secrets.PAT || github.event.client_payload.PAT }}
 
       # 我自己同步到gitee使用，其他人可忽略
