@@ -17,7 +17,7 @@
 					<string>223.6.6.6</string>
 				</array>
 				<key>ServerName</key>
-				<string>dns.alidns.com</string>
+				<string>37078.alidns.com</string>
 			</dict>
 			<key>PayloadDescription</key>
 			<string>Configures device to use AliDNS Encrypted DNS over TLS</string>
