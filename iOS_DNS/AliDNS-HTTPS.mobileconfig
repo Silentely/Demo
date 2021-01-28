@@ -17,7 +17,7 @@
 					<string>223.6.6.6</string>
 				</array>
 				<key>ServerURL</key>
-				<string>https://dns.alidns.com/dns-query</string>
+				<string>https://37078.alidns.com/dns-query</string>
 			</dict>
 			<key>PayloadDescription</key>
 			<string>Configures device to use AliDNS Encrypted DNS over HTTPS</string>
