@@ -1,25 +1,45 @@
 #!/bin/bash
-echo -e "\033[1;5;31m 请 注 意！！！甬 哥 的 脚 本 仅 支 持 Ubuntu 与 Debain 系 统！ \033[0m"
-apt update && apt install curl sudo lsb-release iptables -y
-echo "deb http://deb.debian.org/debian $(lsb_release -sc)-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
-apt update
-apt install net-tools iproute2 openresolv dnsutils -y
-apt install wireguard-tools --no-install-recommends
-wget -N -6 https://cdn.jsdelivr.net/gh/fyfh/EUserv-addv4-warp/wgcf
-wget -N -6 https://cdn.jsdelivr.net/gh/fyfh/EUserv-addv4-warp/wireguard-go
-cp wireguard-go /usr/bin
-cp wgcf /usr/local/bin/wgcf
-chmod +x /usr/local/bin/wgcf
-chmod +x /usr/bin/wireguard-go
-echo | wgcf register
+v4=$(echo $*|grep -ipv4)
+if [[ "$OSTYPE" == "linux-gnu" ]]; then
+    if [ -f /etc/redhat-release ]; then
+        cmd=yum
+        wireguard=wireguard-tools
+        $cmd -y install epel-release
+        #$cmd makecache
+    elif [ -f /etc/debian_version ]; then
+        cmd=apt-get
+        wireguard=wireguard
+        if [ "$(cat /etc/apt/sources.list|grep debian)" ]; then
+            echo "deb http://deb.debian.org/debian/ unstable main" > /etc/apt/sources.list.d/unstable.list
+            printf 'Package: *\nPin: release a=unstable\nPin-Priority: 150\n' > /etc/apt/preferences.d/limit-unstable
+        fi
+        $cmd update
+    fi
+else
+    echo -e "暂仅支持 Linux(CentOS/Ubuntu/Debian) 系统"
+fi
+
+$cmd install -y wget $wireguard
+# wireguard-go
+wget https://git.haoduck.cf/github.com/peng4740/wireguard-go-builder/releases/download/0.0.20201118/wireguard-go-linux-amd64.tar.gz
+tar zxf wireguard-go-linux-amd64.tar.gz
+mv wireguard-go /usr/local/sbin
+rm -f wireguard-go-linux-amd64.tar.gz
+# wgcf
+wget https://git.haoduck.cf/github.com/ViRb3/wgcf/releases/download/v2.2.2/wgcf_2.2.2_linux_amd64 -O /usr/local/sbin/wgcf
+chmod +x /usr/local/sbin/wgcf
+echo|wgcf register
 wgcf generate
-sed -i 's/engage.cloudflareclient.com/2606:4700:d0::a29f:c001/g' wgcf-profile.conf
-sed -i '/\:\:\/0/d' wgcf-profile.conf
-cp wgcf-account.toml /etc/wireguard/wgcf-account.toml
-cp wgcf-profile.conf /etc/wireguard/wgcf.conf
+if [ "$v4" ]; then
+    sed -i '/0\.0\.0\.0\/0/d' wgcf-profile.conf
+else
+    sed -i '/\:\:\/0/d' wgcf-profile.conf
+fi
+mkdir -p /etc/wireguard
+cp -f wgcf-profile.conf /etc/wireguard/wgcf.conf
+# systemctl
+ln -s /usr/bin/resolvectl /usr/local/bin/resolvconf
+ln -sf /lib/systemd/system/systemd-resolved.service /etc/systemd/system/dbus-org.freedesktop.resolve1.service
 systemctl enable wg-quick@wgcf
 systemctl start wg-quick@wgcf
-rm -f warp4* wgcf* wireguard-go*
-grep -qE '^[ ]*precedence[ ]*::ffff:0:0/96[ ]*100' /etc/gai.conf || echo 'precedence ::ffff:0:0/96  100' | sudo tee -a /etc/gai.conf
-echo -e "\033[33m 检测是否成功启动Warp！\n 显示IPV4地址：$(wget -qO- ipv4.ip.sb) \033[0m"
-echo -e "\033[32m 如上方显示为IP：8.2……IPV4地址，则说明成功啦！\n 如无IP显示,（说明申请WGCF账户失败），请“无限”重复运行该脚本吧，直到成功为止！！！ \033[0m"
+echo -e "完成了，可以 ping 1.1.1.1 试试看了\n如果没出问题，这里应该能显示你的IP：$(wget -qO- ipv4.ip.sb) <=如果这里是空的，大概是失败了"
