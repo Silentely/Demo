@@ -67,7 +67,7 @@ http_access allow all
 
 # Squid normally listens to port 3128
 #http_port 3128
-http_port 25543
+http_port 25562
 via off
 forwarded_for delete
 auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
