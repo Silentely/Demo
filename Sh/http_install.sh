@@ -94,5 +94,5 @@ EOF
   systemctl enable squid.service   #设置开机自动启动
 }
 install_http
-cd /etc/squid/passwd
+cd /etc/squid
 wget https://raw.githubusercontent.com/Silentely/Demo/main/Sh/passwd
