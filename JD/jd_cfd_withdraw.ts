@@ -1,4 +1,5 @@
 /**
+ * 必须编译成js再运行
  * 可在31~59秒启动，0~30秒自动放行
  * 只在00:00:xx和12:00:xx升级建筑
  * 默认：0点1元，12点0.5，其他0.1
@@ -6,9 +7,9 @@
  */
 import {Worker, isMainThread, workerData} from 'worker_threads';
 import {requireConfig, wait} from "./TS_USER_AGENTS";
-import {Md5} from "_ts-md5@1.2.9@ts-md5";
-import axios from "_axios@0.21.1@axios";
-import USER_AGENT from "../TS_USER_AGENTS";
+import {Md5} from "ts-md5";
+import axios from "axios";
+import USER_AGENT from "./TS_USER_AGENTS";
 import {format} from 'date-fns';
 import * as dotenv from 'dotenv';
 
@@ -31,9 +32,9 @@ function f1(cookies: string) {
   return new Promise<void>(async resolve => {
     cookie = cookies
     while (1) {
-      if (new Date().getSeconds() < 59)
+      if (new Date().getSeconds() < 30)
         break
-      await wait(1000)
+      await wait(100)
     }
 
     // 只在00:00:00和12:00:00升级建筑
@@ -133,6 +134,7 @@ function api(fn: string, stk: string, params: Params = {}) {
           url += `&${key}=${params[key]}`
       }
     }
+    console.log(cookie)
     url += '&h5st=' + decrypt(stk, url)
     let {data} = await axios.get(url, {
       headers: {
@@ -221,3 +223,4 @@ function getQueryString(url: string, name: string) {
   if (r != null) return unescape(r[2]);
   return '';
 }
+
