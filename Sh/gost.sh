@@ -161,7 +161,7 @@ ${Green_font_prefix}3.${Font_color_suffix} 不使用 -F参数" && echo
 
 config_gost_l_add(){
 	echo -e "请输入 -L 参数"
-	read -e -p "(默认 - [:6666] 例如":xxxx",如需设置密码则输入“admin:123456@:6666”): " param_l
+	read -e -p "(默认 - [:6666] (Http+Socks5二合一)例如":XXXX",如需设置密码则输入“admin:123456@:6666”,如需单独设置Socks5则输入“socks5://:XXXX”,带密码则输入“socks5://admin:123456@:6666”): " param_l
 	[[ -z "$param_l" ]] && param_l=":6666"
 	if [ `grep -c "ServeNodes" /root/.gost/config.json` -eq '0' ]; then
 		python3 -c "import json;j = (json.load(open(\"/root/.gost/config.json\",'r')));a = {'ServeNodes':['$param_l']};j.update(a);print (j['ServeNodes']);json.dump(j,open(\"/root/.gost/config.json\",'w'))" && echo -e "${Info} 配置更新成功"
@@ -179,7 +179,7 @@ config_gost_l_add(){
 
 config_gost_f_add(){
 	echo -e "请输入 -F 参数"
-	read -e -p "(默认 - [http://192.168.1.1:8080] 例如"http://XX.XX.XX.XX:XXXX",如需设置密码则输入“http://admin:123456@192.168.1.1:8080”): " param_f
+	read -e -p "(默认 - [http://192.168.1.1:8080] 例如"http://XX.XX.XX.XX:XXXX",如需设置密码则输入“http://admin:123456@192.168.1.1:8080”,如需设置Socks5则输入“socks5://:XXXX”,带密码则输入“socks5://admin:123456@192.168.1.1:8080”): " param_f
 	[[ -z "$param_f" ]] && param_f=":http://192.168.1.1:8080"
 	if [ `grep -c "ChainNodes" /root/.gost/config.json` -eq '0' ]; then
 		python3 -c "import json;j = (json.load(open(\"/root/.gost/config.json\",'r')));a = {'ChainNodes':['$param_f']};j.update(a);print (j['ServeNodes']);json.dump(j,open(\"/root/.gost/config.json\",'w'))" && echo -e "${Info} 配置更新成功"
