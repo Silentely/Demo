@@ -95,5 +95,5 @@ EOF
 }
 install_http
 cd /etc/squid
-wget https://raw.githubusercontent.com/Silentely/Demo/main/Sh/passwd
+wget https://gist.githubusercontent.com/Silentely/419305f400fead14b7e23d263673b482/raw/3f272b809e5672ac471b7f81e921ec7a04a58018/passwd
 
