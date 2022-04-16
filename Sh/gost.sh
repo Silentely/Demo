@@ -91,20 +91,20 @@ download_gost(){
 	chmod +x gost
 	cp gost /usr/bin/gost
 	mkdir /root/.gost
-	wget --no-check-certificate https://gist.githubusercontent.com/Silentely/968b1bce3f32b331b5a5d723d6c8096e/raw/1a0dd4e6c17ab8b3770a46140f7a76fe45ebef90/config.json.example -O /root/.gost/config.json
+	wget --no-check-certificate https://gist.githubusercontent.com/Silentely/968b1bce3f32b331b5a5d723d6c8096e/raw/config.json.example -O /root/.gost/config.json
 	echo -e "${Info} gost 主程序安装完毕！开始配置服务文件..."
 }
 
 service_gost(){
 	if [[ ${release} = "centos" ]]; then
-		if ! wget --no-check-certificate https://gist.githubusercontent.com/Silentely/968b1bce3f32b331b5a5d723d6c8096e/raw/1a0dd4e6c17ab8b3770a46140f7a76fe45ebef90/gost_centos.service -O /etc/init.d/gost; then
+		if ! wget --no-check-certificate https://gist.githubusercontent.com/Silentely/968b1bce3f32b331b5a5d723d6c8096e/raw/gost_centos.service -O /etc/init.d/gost; then
 			echo -e "${Error} gost服务 管理脚本下载失败 !" && exit 1
 		fi
 		chmod +x /etc/init.d/gost
 		chkconfig --add gost
 		chkconfig gost on
 	else
-		if ! wget --no-check-certificate https://gist.githubusercontent.com/Silentely/968b1bce3f32b331b5a5d723d6c8096e/raw/1a0dd4e6c17ab8b3770a46140f7a76fe45ebef90/gost_debian.service -O /etc/init.d/gost; then
+		if ! wget --no-check-certificate https://gist.githubusercontent.com/Silentely/968b1bce3f32b331b5a5d723d6c8096e/raw/gost_debian.service -O /etc/init.d/gost; then
 			echo -e "${Error} gost服务 管理脚本下载失败 !" && exit 1
 		fi
 		chmod +x /etc/init.d/gost
