@@ -1,7 +1,9 @@
+name: 'Auto sync'
+
 on:
 #  push:
 #    branches:
-#      -master
+#      -main
   schedule:
     - cron: '0 22 * * 1'
 
