@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     
 jobs:
-  update_external_airflow_fork:
+  Sync:
     runs-on: ubuntu-latest
     steps:
       - uses: TobKed/github-forks-sync-action@master
