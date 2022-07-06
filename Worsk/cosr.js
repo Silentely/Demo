@@ -1,7 +1,7 @@
 /*
  * https://github.com/netnr/workers
  *
- * 2019-10-12 - 2022-05-05
+ * 2019-10-12 - 2022-07-06
  * netnr
  */
 
@@ -20,7 +20,7 @@ const config = {
     // 是否丢弃请求中的 Referer，在目标网站应用防盗链时有用
     dropReferer: false,
     // 黑名单，URL 中含有任何一个关键字都会被阻断
-    blockList: [".m3u8", ".ts", ".acc", ".m4s", "photocall.tv", "googlevideo.com", "liveradio.ie"],
+    blockList: [".m3u8", ".ts", ".mp4", ".avi", ".acc", ".m4s", "photocall.tv", "googlevideo.com", "liveradio.ie"],
 };
 
 /**
@@ -50,7 +50,8 @@ async function handleRequest(event) {
             outBody = JSON.stringify({
                 code: invalid ? 400 : 0,
                 usage: 'Host/{URL}',
-                source: 'DO NOT ABUSE'
+                source: 'DO NOT ABUSE',
+                note: 'Blocking a large number of requests, please deploy it yourself'
             });
             outCt = "application/json";
             outStatus = invalid ? 400 : 200;
