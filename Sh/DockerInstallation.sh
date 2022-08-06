@@ -50,7 +50,7 @@ DockerCompose=/usr/local/bin/docker-compose
 DockerVersionFile=docker-version.txt
 DockerCEVersionFile=docker-ce-version.txt
 DockerCECLIVersionFile=docker-ce-cli-version.txt
-PROXY_URL=https://hub.fastgit.xyz/
+PROXY_URL=https://get.daocloud.io/
 DOCKER_COMPOSE_VERSION=v2.9.0
 DOCKER_COMPOSE_DOWNLOAD_URL=https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-Linux-x86_64
 
