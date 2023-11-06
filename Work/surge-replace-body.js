@@ -26,32 +26,32 @@ s修饰符可以让.匹配换行符，如 argument=/.+/s->hello
 function getRegexp(re_str) {
 	let regParts = re_str.match(/^\/(.*?)\/([gims]*)$/);
 	if (regParts) {
-		return 新建 RegExp(regParts[1], regParts[2]);
+		return new RegExp(regParts[1], regParts[2]);
 	} else {
-		return 新建 RegExp(re_str);
+		return new RegExp(re_str);
 	}
 }
 
-let 内容;
+let body;
 if (typeof $argument == "undefined") {
 	console.log("requires $argument");
 } else {
-	if ($script.请键入 === "http-response") {
-		body = $response.内容;
-	} else if ($script.请键入 === "http-request") {
-		body = $request.内容;
+	if ($script.type === "http-response") {
+		body = $response.body;
+	} else if ($script.type === "http-request") {
+		body = $request.body;
 	} else {
 		console.log("script type error");
 	}
 }
 
 if (body) {
-	$argument.分屏("&").forEach((item) => {
-		let [match, replace] = item.分屏("->");
+	$argument.split("&").forEach((item) => {
+		let [match, replace] = item.split("->");
 		let re = getRegexp(match);
 		body = body.replace(re, replace);
 	});
-	$done({ 内容 });
+	$done({ body });
 } else {
 	console.log("Not Modify");
 	$done({});
