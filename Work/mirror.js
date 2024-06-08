@@ -1,4 +1,4 @@
-//使用方法：docker pull 你的域名/mysql/mysql-server
+// 使用方法：docker pull 你的域名/mysql/mysql-server
 'use strict'
 
 const hub_host = 'registry-1.docker.io'
