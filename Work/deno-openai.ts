@@ -1,6 +1,4 @@
-/*
- * 代码1
- */
+// 代码1
 Deno.serve(async (req) => {
   const url = new URL(req.url)
   return fetch("https://api.openai.com" + url.pathname, {
@@ -13,9 +11,7 @@ Deno.serve(async (req) => {
   })
 });
 
-/*
- * 代码2
- */
+// 代码2
 const OPENAI_API_HOST = "api.openai.com";
 
 Deno.serve(async (request) => {
