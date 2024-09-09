@@ -1,21 +1,19 @@
 'use strict'
 
-/*
- * https://github.com/hunshcn/gh-proxy
- */
-
 /**
  * static files (404.html, sw.js, conf.js)
  */
 const ASSET_URL = 'https://hunshcn.github.io/gh-proxy/'
 // 前缀，如果自定义路由为example.com/gh/*，将PREFIX改为 '/gh/'，注意，少一个杠都会错！
 const PREFIX = '/'
-// 分支文件使用jsDelivr镜像的开关，0为关闭，默认开启
+// 分支文件使用jsDelivr镜像的开关，0为关闭，默认关闭
 const Config = {
-    jsdelivr: 1
+    jsdelivr: 0
 }
 
-/** @type {RequestInit} */
+const whiteList = [] // 白名单，路径里面有包含字符的才会通过，e.g. ['/username/']
+
+/** @type {ResponseInit} */
 const PREFLIGHT_INIT = {
     status: 204,
     headers: new Headers({
@@ -85,6 +83,12 @@ async function fetchHandler(e) {
     }
     // cfworker 会把路径中的 `//` 合并成 `/`
     path = urlObj.href.substr(urlObj.origin.length + PREFIX.length).replace(/^https?:\/+/, 'https://')
+
+    // 检查路径是否为空或仅包含域名
+    if (!path || path === '/' || path === urlObj.host) {
+        return new Response(null, { status: 404 })
+    }
+
     if (path.search(exp1) === 0 || path.search(exp5) === 0 || path.search(exp6) === 0 || path.search(exp3) === 0 || path.search(exp4) === 0) {
         return httpHandler(req, path)
     } else if (path.search(exp2) === 0) {
@@ -96,7 +100,7 @@ async function fetchHandler(e) {
             return httpHandler(req, path)
         }
     } else if (path.search(exp4) === 0) {
-        const newUrl = path.replace(/(?<=com\/.+?\/.+?)\/(.+?\/)/, '@$1').replace(/^(?:https?:\/\/)?raw\.(?:githubusercontent|github)\.com/, 'https://cdn.jsdelivr.net/gh')
+        const newUrl = path.replace(/(?<=com\/.+?\/.+?)\/(.+?\/)/, '@\$1').replace(/^(?:https?:\/\/)?raw\.(?:githubusercontent|github)\.com/, 'https://cdn.jsdelivr.net/gh')
         return Response.redirect(newUrl, 302)
     } else {
         return fetch(ASSET_URL + path)
@@ -121,7 +125,17 @@ function httpHandler(req, pathname) {
     const reqHdrNew = new Headers(reqHdrRaw)
 
     let urlStr = pathname
-    if (urlStr.startsWith('github')) {
+    let flag = !Boolean(whiteList.length)
+    for (let i of whiteList) {
+        if (urlStr.includes(i)) {
+            flag = true
+            break
+        }
+    }
+    if (!flag) {
+        return new Response("blocked", {status: 403})
+    }
+    if (urlStr.search(/^https?:\/\//) !== 0) {
         urlStr = 'https://' + urlStr
     }
     const urlObj = newUrl(urlStr)
