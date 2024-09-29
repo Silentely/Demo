@@ -39,6 +39,6 @@ jobs:
         file: Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
-        tags: cosrbackup/chatgpt:latest
+        tags: xx/xx:latest
         #build-args: |           #传递构建参数
           #VERSION=1.3.1
