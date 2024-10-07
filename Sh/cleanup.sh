@@ -45,6 +45,12 @@ rm -rf /var/lib/dpkg/*-old
 rm -rf /var/lib/ucf/cache/*
 rm -rf /var/lib/ucf/hashfile.*
 rm -rf /var/lib/ucf/registry.*
-ls –color=never /usr/share/locale | grep -v -E ‘^locale.alias$’ | xargs -I{} rm -rf ‘/usr/share/locale/'{}
-echo -n > /usr/share/locale/locale.alias
-ls –color=never /usr/share/i18n/locales | grep -v -E ‘^C$|^en_GB|^en_US|^i18n|^iso14651|^POSIX$|^translit_|^zh_CN’ | xargs -I{} rm -rf ‘/usr/share/i18n/locales/'{}
+rm -rf /tmp/*
+rm -rf /tmp/.*
+rm -rf /var/tmp/*
+rm -rf /var/cache/*
+rm -rf /var/mail/*
+rm -rf /media/*
+for tmp in $(find / -name ‘*.ucf-dist’); do echo $tmp; done
+for tmp in $(find / -name ‘*~’); do echo $tmp; done
+for tmp in $(find / -name ‘*-old’); do echo $tmp; done
