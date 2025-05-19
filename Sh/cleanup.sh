@@ -194,6 +194,10 @@ check_old_sources() {
   divider
   echo -e "${YELLOW}正在检查软件源配置文件中可能失效的源...${NC}"
   progress_bar 8
+  
+  # 创建临时文件保存失效源信息
+  invalid_sources_file=$(mktemp)
+  
   {
     # 检查apt源
     if [ -f /etc/apt/sources.list ]; then
@@ -201,6 +205,7 @@ check_old_sources() {
         url=$(echo "$line" | awk '{print $2}')
         if ! curl -sf --max-time 5 "$url" >/dev/null; then
           echo -e "${RED}检测到失效源: $url (请手动检查)${NC}"
+          echo "sources.list:$line" >> "$invalid_sources_file"
         fi
       done
       for f in /etc/apt/sources.list.d/*.list; do
@@ -209,21 +214,146 @@ check_old_sources() {
           url=$(echo "$line" | awk '{print $2}')
           if ! curl -sf --max-time 5 "$url" >/dev/null; then
             echo -e "${RED}检测到失效源: $url (请手动检查)${NC}"
+            echo "$f:$line" >> "$invalid_sources_file"
           fi
         done
       done
     fi
     # 检查yum/dnf源
     if [ -d /etc/yum.repos.d/ ]; then
-      grep -E '^baseurl=' /etc/yum.repos.d/*.repo 2>/dev/null | cut -d= -f2 | while read -r url; do
-        if ! curl -sf --max-time 5 "$url" >/dev/null; then
-          echo -e "${RED}检测到失效源: $url (请手动检查)${NC}"
-        fi
+      for f in /etc/yum.repos.d/*.repo; do
+        [ -e "$f" ] || continue
+        grep -E '^baseurl=' "$f" | while read -r line; do
+          url=$(echo "$line" | cut -d= -f2)
+          if ! curl -sf --max-time 5 "$url" >/dev/null; then
+            echo -e "${RED}检测到失效源: $url (请手动检查)${NC}"
+            echo "$f:$line" >> "$invalid_sources_file"
+          fi
+        done
       done
     fi
     sleep 1
   } & spinner
-  echo -e "${CYAN}失效源如有显示，请手动编辑对应配置文件删除或修正。${NC}"
+  
+  # 检查是否有失效源
+  if [ -s "$invalid_sources_file" ]; then
+    echo -e "${YELLOW}发现失效源。您可以选择手动检查或使用'自动清理失效源'功能。${NC}"
+  else
+    echo -e "${GREEN}未检测到失效源，所有软件源正常。${NC}"
+    rm -f "$invalid_sources_file"
+  fi
+  
+  divider
+}
+
+# 自动清理失效源
+auto_clean_sources() {
+  divider
+  echo -e "${YELLOW}开始自动清理失效源...${NC}"
+  progress_bar 10
+  
+  # 检查临时文件是否存在
+  invalid_sources_file=$(find /tmp -name "tmp.*" -type f -mmin -60 | xargs grep -l "sources.list:" 2>/dev/null | head -1)
+  
+  if [ -z "$invalid_sources_file" ] || [ ! -s "$invalid_sources_file" ]; then
+    # 如果没有之前检测的结果，重新进行检测
+    invalid_sources_file=$(mktemp)
+    {
+      # 检查apt源
+      if [ -f /etc/apt/sources.list ]; then
+        grep -E '^deb ' /etc/apt/sources.list | while read -r line; do
+          url=$(echo "$line" | awk '{print $2}')
+          if ! curl -sf --max-time 5 "$url" >/dev/null; then
+            echo "sources.list:$line" >> "$invalid_sources_file"
+          fi
+        done
+        for f in /etc/apt/sources.list.d/*.list; do
+          [ -e "$f" ] || continue
+          grep -E '^deb ' "$f" | while read -r line; do
+            url=$(echo "$line" | awk '{print $2}')
+            if ! curl -sf --max-time 5 "$url" >/dev/null; then
+              echo "$f:$line" >> "$invalid_sources_file"
+            fi
+          done
+        done
+      fi
+      # 检查yum/dnf源
+      if [ -d /etc/yum.repos.d/ ]; then
+        for f in /etc/yum.repos.d/*.repo; do
+          [ -e "$f" ] || continue
+          grep -E '^baseurl=' "$f" | while read -r line; do
+            url=$(echo "$line" | cut -d= -f2)
+            if ! curl -sf --max-time 5 "$url" >/dev/null; then
+              echo "$f:$line" >> "$invalid_sources_file"
+            fi
+          done
+        done
+      fi
+    } & spinner
+  fi
+  
+  # 处理检测到的失效源
+  if [ -s "$invalid_sources_file" ]; then
+    echo -e "${CYAN}检测到以下失效源:${NC}"
+    cat "$invalid_sources_file" | while read -r entry; do
+      file=$(echo "$entry" | cut -d: -f1)
+      line=$(echo "$entry" | cut -d: -f2-)
+      
+      # 针对包含"[arch=amd64"的特殊处理
+      if echo "$line" | grep -q "\[arch=amd64"; then
+        echo -e "${YELLOW}正在处理文件 $file 中的架构相关配置...${NC}"
+        # 创建临时文件
+        tmp_file=$(mktemp)
+        # 过滤掉有问题的行，或修改行
+        if [ "$file" == "sources.list" ]; then
+          grep -v "$line" /etc/apt/sources.list > "$tmp_file"
+          echo -e "${GREEN}已从 /etc/apt/sources.list 中删除失效源:${NC}"
+          echo -e "${RED}$line${NC}"
+          # 备份原文件并替换
+          cp /etc/apt/sources.list /etc/apt/sources.list.bak.$(date +%Y%m%d%H%M%S)
+          mv "$tmp_file" /etc/apt/sources.list
+          chmod 644 /etc/apt/sources.list
+        else
+          grep -v "$line" "$file" > "$tmp_file"
+          echo -e "${GREEN}已从 $file 中删除失效源:${NC}"
+          echo -e "${RED}$line${NC}"
+          # 备份原文件并替换
+          cp "$file" "${file}.bak.$(date +%Y%m%d%H%M%S)"
+          mv "$tmp_file" "$file"
+          chmod 644 "$file"
+        fi
+      else
+        # 其他类型的失效源处理
+        echo -e "${YELLOW}正在处理失效源: $line${NC}"
+        tmp_file=$(mktemp)
+        if [ "$file" == "sources.list" ]; then
+          grep -v "$line" /etc/apt/sources.list > "$tmp_file"
+          echo -e "${GREEN}已从 /etc/apt/sources.list 中删除失效源:${NC}"
+          echo -e "${RED}$line${NC}"
+          # 备份原文件并替换
+          cp /etc/apt/sources.list /etc/apt/sources.list.bak.$(date +%Y%m%d%H%M%S)
+          mv "$tmp_file" /etc/apt/sources.list
+          chmod 644 /etc/apt/sources.list
+        else
+          grep -v "$line" "$file" > "$tmp_file"
+          echo -e "${GREEN}已从 $file 中删除失效源:${NC}"
+          echo -e "${RED}$line${NC}"
+          # 备份原文件并替换
+          cp "$file" "${file}.bak.$(date +%Y%m%d%H%M%S)"
+          mv "$tmp_file" "$file"
+          chmod 644 "$file"
+        fi
+      fi
+    done
+    
+    echo -e "${GREEN}失效源清理完成! 原始文件已备份为 .bak.时间戳 格式。${NC}"
+  else
+    echo -e "${GREEN}未检测到失效源，无需清理。${NC}"
+  fi
+  
+  # 清理临时文件
+  rm -f "$invalid_sources_file"
+  
   divider
 }
 
@@ -240,9 +370,10 @@ while true; do
   echo -e "${CYAN}5) 仅清理旧snap版本文件${NC}"
   echo -e "${CYAN}6) 仅清理旧软件包${NC}"
   echo -e "${CYAN}7) 仅检测失效软件源${NC}"
+  echo -e "${CYAN}8) 自动清理失效软件源${NC}"
   echo -e "${RED}0) 退出${NC}"
   divider
-  read -rp "$(echo -e "${YELLOW}请输入选项(0-7): ${NC}")" choice
+  read -rp "$(echo -e "${YELLOW}请输入选项(0-8): ${NC}")" choice
   case $choice in
     1)
       clean_system
@@ -251,6 +382,10 @@ while true; do
       clean_snap
       clean_old_packages
       check_old_sources
+      read -rp "$(echo -e "${YELLOW}是否要自动清理检测到的失效源? (y/n): ${NC}")" clean_choice
+      if [[ "$clean_choice" == "y" || "$clean_choice" == "Y" ]]; then
+        auto_clean_sources
+      fi
       pause
       ;;
     2)
@@ -275,6 +410,10 @@ while true; do
       ;;
     7)
       check_old_sources
+      pause
+      ;;
+    8)
+      auto_clean_sources
       pause
       ;;
     0)
