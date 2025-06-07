@@ -58,6 +58,29 @@ set_github_mirror() {
     fi
 }
 
+# 为 Neofetch 配置自定义文件
+configure_neofetch() {
+    local config_url="https://gist.githubusercontent.com/Silentely/a1773867592cf31479bf8d45713b60d2/raw/config.conf"
+    local config_dir="/root/.config/neofetch"
+    local config_path="${config_dir}/config.conf"
+
+    echo -e "${CYAN}📥 正在下载 Neofetch 配置文件...${NC}"
+    sudo mkdir -p "$config_dir"
+    sudo wget -O "$config_path" "$config_url"
+}
+
+# 为 Fastfetch 配置自定义文件
+configure_fastfetch() {
+    local config_url="https://gist.githubusercontent.com/Silentely/a1773867592cf31479bf8d45713b60d2/raw/config.jsonc"
+    local config_dir="/root/.config/fastfetch"
+    local config_path="${config_dir}/config.jsonc"
+
+    echo -e "${CYAN}🔧 正在为 Fastfetch 配置自定义文件...${NC}"
+    sudo mkdir -p "$config_dir"
+    sudo wget -O "$config_path" "$config_url"
+    echo -e "${GREEN}✅ Fastfetch 配置文件下载完成。${NC}"
+}
+
 # 为 Debian 11 安装 neofetch
 install_neofetch_on_bullseye() {
     echo -e "${YELLOW}ℹ️  检测到您的系统是 Debian 11 (Bullseye)。${NC}"
@@ -73,13 +96,7 @@ install_neofetch_on_bullseye() {
     sudo chmod +x /etc/profile.d/neofetch.sh
 
     # 下载并应用配置文件
-    local config_url="https://gist.githubusercontent.com/Silentely/a1773867592cf31479bf8d45713b60d2/raw/config.jsonc"
-    local config_dir="/root/.config/neofetch"
-    local config_path="${config_dir}/config.conf" # neofetch 使用 config.conf
-
-    echo -e "${CYAN}📥 正在下载 Neofetch 配置文件...${NC}"
-    sudo mkdir -p "$config_dir"
-    sudo wget -O "$config_path" "$config_url"
+    configure_neofetch
 
     echo -e "${GREEN}🎉 Neofetch 已安装并配置完成！请重新登录以查看效果。${NC}"
     exit 0
@@ -117,6 +134,7 @@ if apt-cache show fastfetch &>/dev/null; then
     echo -e "${CYAN}🚀 检测到软件源中存在 fastfetch，将通过 apt 安装...${NC}"
     sudo apt-get update
     sudo apt-get install -y fastfetch
+    configure_fastfetch
     echo -e "${GREEN}🎉 fastfetch 已通过官方源成功安装！${NC}"
     exit 0
 fi
@@ -176,4 +194,5 @@ else
 fi
 
 rm "${release_name}"
+configure_fastfetch
 echo -e "${GREEN}🎉 fastfetch 安装/更新完成！${NC}"
