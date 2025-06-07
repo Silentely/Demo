@@ -12,7 +12,7 @@
 #   本脚本自动化设置系统全局语言环境为简体中文。适用于现代化基于systemd的
 #   Linux发行版，如CentOS 7+、RHEL 7+、Rocky、AlmaLinux、Debian和Ubuntu。
 #
-# Project / 项目地址: https://github.com/Silentely/Demo/
+# Project / 项目地址: https://github.com/Silentely/Demo
 #
 # Usage / 使用方法:
 #   sudo bash set_locale_cn.sh
@@ -51,6 +51,10 @@ _log() {
         "error") 
             echo -e "${color_red}ERROR / 错误:${color_plain} ${msg_en}" >&2
             [[ -n "$msg_cn" ]] && echo -e "${color_red}             ${color_plain} ${msg_cn}" >&2
+            ;;
+        "debug")
+            echo -e "${color_yellow}DEBUG / 调试:${color_plain} ${msg_en}"
+            [[ -n "$msg_cn" ]] && echo -e "${color_yellow}             ${color_plain} ${msg_cn}"
             ;;
         *) echo -e "${msg_en}" ;;
     esac
@@ -143,6 +147,7 @@ create_backup() {
     localectl status > "$BACKUP_DIR/localectl_status.bak" 2>/dev/null
     [[ -f /etc/locale.conf ]] && cp /etc/locale.conf "$BACKUP_DIR/"
     [[ -f /etc/default/locale ]] && cp /etc/default/locale "$BACKUP_DIR/"
+    [[ -f /etc/locale.gen ]] && cp /etc/locale.gen "$BACKUP_DIR/"
     
     _log "success" "Backup created at: $BACKUP_DIR" "备份已创建于: $BACKUP_DIR"
 }
@@ -152,28 +157,66 @@ install_language_packs() {
     _log "info" "Installing Chinese language packs..." "正在安装中文语言包..."
     
     local install_success=false
+    local error_msg=""
     
     case "$ID" in
-        ubuntu|debian)
-            if apt-get update -y > /dev/null 2>&1 && \
-               apt-get install -y language-pack-zh-hans language-pack-zh-hans-base > /dev/null 2>&1; then
-                install_success=true
+        ubuntu)
+            _log "debug" "Installing Ubuntu language packs..." "正在安装Ubuntu语言包..."
+            if apt-get update -y > /dev/null 2>&1; then
+                if apt-get install -y language-pack-zh-hans language-pack-zh-hans-base > /dev/null 2>&1; then
+                    install_success=true
+                else
+                    error_msg="Failed to install language-pack-zh-hans / 安装language-pack-zh-hans失败"
+                fi
+            else
+                error_msg="Failed to update package list / 更新软件包列表失败"
+            fi
+            ;;
+        debian)
+            _log "debug" "Installing Debian language packs..." "正在安装Debian语言包..."
+            if apt-get update -y > /dev/null 2>&1; then
+                # For Debian, we need locales and ensure zh_CN.UTF-8 is available
+                if apt-get install -y locales locales-all > /dev/null 2>&1; then
+                    install_success=true
+                else
+                    # Fallback: try just locales
+                    if apt-get install -y locales > /dev/null 2>&1; then
+                        install_success=true
+                    else
+                        error_msg="Failed to install locales package / 安装locales包失败"
+                    fi
+                fi
+            else
+                error_msg="Failed to update package list / 更新软件包列表失败"
             fi
             ;;
         centos|rhel|rocky|almalinux|fedora)
+            _log "debug" "Installing RHEL-based language packs..." "正在安装RHEL系语言包..."
             if command -v dnf &> /dev/null; then
                 if dnf install -y glibc-langpack-zh langpacks-zh_CN > /dev/null 2>&1; then
                     install_success=true
+                else
+                    # Fallback: try just glibc-langpack-zh
+                    if dnf install -y glibc-langpack-zh > /dev/null 2>&1; then
+                        install_success=true
+                    else
+                        error_msg="Failed to install glibc-langpack-zh / 安装glibc-langpack-zh失败"
+                    fi
                 fi
             else
                 if yum install -y glibc-langpack-zh > /dev/null 2>&1; then
                     install_success=true
+                else
+                    error_msg="Failed to install glibc-langpack-zh / 安装glibc-langpack-zh失败"
                 fi
             fi
             ;;
         opensuse*)
+            _log "debug" "Installing openSUSE language packs..." "正在安装openSUSE语言包..."
             if zypper install -y glibc-locale-zh > /dev/null 2>&1; then
                 install_success=true
+            else
+                error_msg="Failed to install glibc-locale-zh / 安装glibc-locale-zh失败"
             fi
             ;;
         *)
@@ -186,13 +229,35 @@ install_language_packs() {
         _log "success" "Language packs installed successfully" "语言包安装成功"
     else
         _log "error" "Failed to install language packs" "语言包安装失败"
-        exit 1
+        [[ -n "$error_msg" ]] && _log "debug" "$error_msg"
+        
+        # Provide manual instructions / 提供手动安装说明
+        case "$ID" in
+            debian)
+                _log "info" "Manual installation for Debian:" "Debian手动安装方法:"
+                _log "info" "Run: apt-get update && apt-get install locales" "运行: apt-get update && apt-get install locales"
+                ;;
+            ubuntu)
+                _log "info" "Manual installation for Ubuntu:" "Ubuntu手动安装方法:"
+                _log "info" "Run: apt-get update && apt-get install language-pack-zh-hans" "运行: apt-get update && apt-get install language-pack-zh-hans"
+                ;;
+        esac
+        
+        # Ask user if they want to continue / 询问用户是否继续
+        echo ""
+        echo -n "Continue without language packs? / 不安装语言包继续？ (y/N): "
+        read -r -n 1 REPLY
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+        _log "warn" "Continuing without language pack installation" "在未安装语言包的情况下继续"
     fi
 }
 
 # Generate locale if needed / 如需要则生成语言环境
 generate_locale() {
-    _log "info" "Generating $TARGET_LOCALE locale..." "正在生成 $TARGET_LOCALE 语言环境..."
+    _log "info" "Configuring $TARGET_LOCALE locale..." "正在配置 $TARGET_LOCALE 语言环境..."
     
     # Check if locale is available / 检查语言环境是否可用
     if locale -a 2>/dev/null | grep -q "^${TARGET_LOCALE}$"; then
@@ -200,13 +265,36 @@ generate_locale() {
         return 0
     fi
     
-    # Try to generate locale using locale-gen (if available) / 尝试使用locale-gen生成语言环境
-    if command -v locale-gen &> /dev/null; then
-        # Ensure locale is in /etc/locale.gen / 确保语言环境在/etc/locale.gen中
-        if [[ -f /etc/locale.gen ]]; then
+    # For Debian/Ubuntu systems, configure locale.gen / 对于Debian/Ubuntu系统，配置locale.gen
+    if [[ "$ID" == "debian" || "$ID" == "ubuntu" ]]; then
+        _log "debug" "Configuring locale.gen for Debian/Ubuntu..." "正在为Debian/Ubuntu配置locale.gen..."
+        
+        # Ensure locale.gen exists / 确保locale.gen存在
+        if [[ ! -f /etc/locale.gen ]]; then
+            # Create a basic locale.gen file / 创建基本的locale.gen文件
+            cat > /etc/locale.gen << EOF
+# Locale configuration
+en_US.UTF-8 UTF-8
+zh_CN.UTF-8 UTF-8
+EOF
+            _log "debug" "Created /etc/locale.gen file" "已创建/etc/locale.gen文件"
+        else
+            # Enable zh_CN.UTF-8 in existing locale.gen / 在现有locale.gen中启用zh_CN.UTF-8
             if ! grep -q "^${TARGET_LOCALE}" /etc/locale.gen; then
-                echo "$TARGET_LOCALE UTF-8" >> /etc/locale.gen
+                if grep -q "^# ${TARGET_LOCALE}" /etc/locale.gen; then
+                    # Uncomment existing line / 取消注释现有行
+                    sed -i "s/^# ${TARGET_LOCALE}/${TARGET_LOCALE}/" /etc/locale.gen
+                else
+                    # Add new line / 添加新行
+                    echo "$TARGET_LOCALE UTF-8" >> /etc/locale.gen
+                fi
+                _log "debug" "Added $TARGET_LOCALE to /etc/locale.gen" "已将$TARGET_LOCALE添加到/etc/locale.gen"
             fi
+        fi
+        
+        # Generate locales / 生成语言环境
+        if command -v locale-gen &> /dev/null; then
+            _log "debug" "Running locale-gen..." "正在运行locale-gen..."
             locale-gen > /dev/null 2>&1
         fi
     fi
@@ -214,7 +302,7 @@ generate_locale() {
     # Verify locale is now available / 验证语言环境现在是否可用
     if ! locale -a 2>/dev/null | grep -q "^${TARGET_LOCALE}$"; then
         _log "warn" "Could not verify that $TARGET_LOCALE is available" "无法验证 $TARGET_LOCALE 是否可用"
-        _log "warn" "Proceeding anyway - the system may generate it automatically" "仍然继续 - 系统可能会自动生成"
+        _log "warn" "The system may generate it automatically when needed" "系统可能会在需要时自动生成"
     else
         _log "success" "Locale $TARGET_LOCALE is now available" "语言环境 $TARGET_LOCALE 现在已可用"
     fi
