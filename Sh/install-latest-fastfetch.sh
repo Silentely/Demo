@@ -1,6 +1,7 @@
 # 脚本名称: install-latest-fastfetch.sh
 # 功能: 从 GitHub 下载并安装最新版的 fastfetch (.deb 包)
 #!/bin/bash
+#!/bin/bash
 
 # --- 颜色和表情符号定义 ---
 GREEN='\033[0;32m'
@@ -91,8 +92,8 @@ if [ "$VERSION_CODENAME" == "bullseye" ]; then
     echo -e "${CYAN}为了确保兼容性，将通过编译源代码的方式进行安装...${NC}"
 
     # 检查并安装编译所需的依赖
-    local build_deps=("build-essential" "cmake" "libpci-dev" "libvulkan-dev" "libxcb-randr0-dev" "libxrandr-dev" "libxcb-image0-dev" "libdbus-1-dev")
-    local missing_build_deps=()
+    build_deps=("build-essential" "cmake" "libpci-dev" "libvulkan-dev" "libxcb-randr0-dev" "libxrandr-dev" "libxcb-image0-dev" "libdbus-1-dev")
+    missing_build_deps=()
     echo -e "${CYAN}🔍 正在检查编译依赖...${NC}"
     for dep in "${build_deps[@]}"; do
         if ! dpkg-query -W -f='${Status}' "$dep" 2>/dev/null | grep -q "ok installed"; then
