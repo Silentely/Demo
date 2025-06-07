@@ -22,7 +22,7 @@
 readonly SCRIPT_NAME="$(basename "$0")"
 readonly TARGET_LOCALE="zh_CN.UTF-8"
 readonly BACKUP_DIR="/tmp/locale_backup_$(date +%s)"
-readonly PROJECT_URL="https://github.com/Silentely/Demo/"
+readonly PROJECT_URL="https://github.com/Silentely/Demo"
 
 # --- Helper Functions for Colored Output / 彩色输出辅助函数 ---
 _log() {
