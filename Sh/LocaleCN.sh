@@ -12,7 +12,7 @@
 #   本脚本自动化设置系统全局语言环境为简体中文。适用于现代化基于systemd的
 #   Linux发行版，如CentOS 7+、RHEL 7+、Rocky、AlmaLinux、Debian和Ubuntu。
 #
-# Project / 项目地址: https://github.com/Silentely/Demo
+# Project / 项目地址: https://github.com/Silentely/Demo/
 #
 # Usage / 使用方法:
 #   sudo bash set_locale_cn.sh
@@ -57,6 +57,18 @@ _log() {
             [[ -n "$msg_cn" ]] && echo -e "${color_yellow}             ${color_plain} ${msg_cn}"
             ;;
         *) echo -e "${msg_en}" ;;
+    esac
+}
+
+# Check if script is running from a pipe or file descriptor / 检查脚本是否通过管道或文件描述符运行
+is_script_piped() {
+    case "$0" in
+        /dev/fd/*|/proc/self/fd/*|/dev/stdin|-)
+            return 0  # Script is piped / 脚本是通过管道运行的
+            ;;
+        *)
+            return 1  # Script is a regular file / 脚本是常规文件
+            ;;
     esac
 }
 
@@ -361,15 +373,25 @@ show_completion() {
     echo "=================================================================="
     echo ""
     
-    # Ask for script deletion / 询问是否删除脚本
-    echo -n "Do you want to delete this script? / 是否删除此脚本？ (y/N): "
-    read -r -n 1 REPLY
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        _log "info" "Deleting script: $0" "正在删除脚本: $0"
-        rm -- "$0" && _log "success" "Script deleted successfully" "脚本删除成功"
+    # Handle script deletion based on how it was executed / 根据脚本执行方式处理删除
+    if is_script_piped; then
+        _log "info" "Script was executed via pipe/stdin, no file to delete" "脚本通过管道/标准输入执行，无文件可删除"
+        _log "info" "If you downloaded this script, you can manually delete it" "如果您下载了此脚本，可以手动删除"
     else
-        _log "info" "Script preserved at: $0" "脚本保留在: $0"
+        # Ask for script deletion only if it's a regular file / 仅当是常规文件时询问删除
+        echo -n "Do you want to delete this script? / 是否删除此脚本？ (y/N): "
+        read -r -n 1 REPLY
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            if [[ -f "$0" && -w "$0" ]]; then
+                _log "info" "Deleting script: $0" "正在删除脚本: $0"
+                rm -- "$0" && _log "success" "Script deleted successfully" "脚本删除成功"
+            else
+                _log "warn" "Cannot delete script (not writable or not a file)" "无法删除脚本（不可写或非文件）"
+            fi
+        else
+            _log "info" "Script preserved at: $0" "脚本保留在: $0"
+        fi
     fi
     
     echo ""
