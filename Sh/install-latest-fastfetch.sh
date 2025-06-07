@@ -35,6 +35,12 @@ if command -v fastfetch &> /dev/null; then
     echo -e "${YELLOW}ℹ️  检测到已安装 fastfetch。${NC}"
     echo -e "${YELLOW}   - 当前版本: ${current_version}${NC}"
     echo -e "${GREEN}   - 最新版本: ${latest_version}${NC}"
+
+    # 检查版本是否一致
+    if [ "${current_version}" == "${latest_version}" ]; then
+        echo -e "${GREEN}✅ 已经是最新版本，无需任何操作。${NC}"
+        exit 0
+    fi
 else
     echo -e "${YELLOW}ℹ️  系统中未安装 fastfetch。准备进行全新安装...${NC}"
 fi
