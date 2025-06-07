@@ -22,7 +22,6 @@ check_and_install_deps() {
     local deps=("wget" "jq" "lsb-release" "ca-certificates" "git" "curl")
     echo -e "${CYAN}🔍 正在检查脚本依赖...${NC}"
     for dep in "${deps[@]}"; do
-        # 对于 lsb-release 包，其命令是 lsb_release
         local cmd_name="$dep"
         if [ "$dep" == "lsb-release" ]; then
             cmd_name="lsb_release"
@@ -47,13 +46,10 @@ check_and_install_deps() {
 # 检测 IP 地址并设置 GitHub 镜像
 set_github_mirror() {
     echo -e "${CYAN}🌍 正在检测网络环境...${NC}"
-    # 使用 ipinfo.io 获取国家代码，设置5秒超时，失败则返回空。
     local country_code
     country_code=$(curl -s --connect-timeout 5 https://ipinfo.io/country || echo "")
 
-    # 默认前缀为空
     GITHUB_URL_PREFIX=""
-
     if [ "$country_code" == "CN" ]; then
         echo -e "${YELLOW}⚠️  检测到您在中国大陆，将使用镜像加速下载...${NC}"
         GITHUB_URL_PREFIX="https://git.99886655.xyz/"
@@ -62,22 +58,44 @@ set_github_mirror() {
     fi
 }
 
+# 为 Debian 11 安装 neofetch
+install_neofetch_on_bullseye() {
+    echo -e "${YELLOW}ℹ️  检测到您的系统是 Debian 11 (Bullseye)。${NC}"
+    echo -e "${CYAN}将为您安装 Neofetch 作为替代方案...${NC}"
+
+    # 安装 neofetch
+    sudo apt-get update
+    sudo apt-get install -y neofetch
+
+    # 创建 profile.d 脚本，使其在登录时自动运行
+    echo -e "${CYAN}🔧 正在配置 Neofetch 开机启动...${NC}"
+    echo -e '#!/bin/sh\nneofetch' | sudo tee /etc/profile.d/neofetch.sh
+    sudo chmod +x /etc/profile.d/neofetch.sh
+
+    # 下载并应用配置文件
+    local config_url="https://gist.githubusercontent.com/Silentely/a1773867592cf31479bf8d45713b60d2/raw/config.jsonc"
+    local config_dir="/root/.config/neofetch"
+    local config_path="${config_dir}/config.conf" # neofetch 使用 config.conf
+
+    echo -e "${CYAN}📥 正在下载 Neofetch 配置文件...${NC}"
+    sudo mkdir -p "$config_dir"
+    sudo wget -O "$config_path" "$config_url"
+
+    echo -e "${GREEN}🎉 Neofetch 已安装并配置完成！请重新登录以查看效果。${NC}"
+    exit 0
+}
+
 
 # --- 脚本开始 ---
-# 设置陷阱 (trap)，在接收到 ERR 信号 (任何命令失败) 时执行 handle_error 函数
 trap 'handle_error $LINENO' ERR
-
-# set -e: 如果任何命令失败，脚本将立即退出 (这会触发上面的 trap)
 set -e
 
-# 首先执行依赖检查和镜像设置
 check_and_install_deps
 set_github_mirror
 
 
 # --- 主逻辑开始 ---
 VERSION_CODENAME=""
-# 检测操作系统和版本代号
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     if [ "$ID" == "debian" ]; then
@@ -85,59 +103,26 @@ if [ -f /etc/os-release ]; then
     fi
 fi
 
-# --- Debian 11 (Bullseye) 的特殊处理逻辑：从源代码编译 ---
+# 如果是 Debian 11，执行 neofetch 安装流程
 if [ "$VERSION_CODENAME" == "bullseye" ]; then
-    echo -e "${YELLOW}ℹ️  检测到您的系统是 Debian 11 (Bullseye)。${NC}"
-    echo -e "${CYAN}为了确保兼容性，将通过编译源代码的方式进行安装...${NC}"
-
-    # 检查并安装编译所需的依赖
-    build_deps=("build-essential" "cmake" "libpci-dev" "libvulkan-dev" "libxcb-randr0-dev" "libxrandr-dev" "libxcb-image0-dev" "libdbus-1-dev")
-    missing_build_deps=()
-    echo -e "${CYAN}🔍 正在检查编译依赖...${NC}"
-    for dep in "${build_deps[@]}"; do
-        if ! dpkg-query -W -f='${Status}' "$dep" 2>/dev/null | grep -q "ok installed"; then
-            missing_build_deps+=("$dep")
-        fi
-    done
-
-    if [ ${#missing_build_deps[@]} -gt 0 ]; then
-        echo -e "${YELLOW}⚠️  检测到以下编译依赖缺失: ${missing_build_deps[*]}${NC}"
-        echo -e "${CYAN}🔧 正在自动安装...${NC}"
-        sudo apt-get update
-        sudo apt-get install -y "${missing_build_deps[@]}"
-    else
-        echo -e "${GREEN}✅ 编译依赖均已满足。${NC}"
-    fi
-    
-    # 在临时目录中进行编译
-    tmp_dir=$(mktemp -d)
-    echo -e "${CYAN}📥 正在从 GitHub 下载源代码至 ${tmp_dir}...${NC}"
-    git clone --depth 1 "${GITHUB_URL_PREFIX}https://github.com/fastfetch-cli/fastfetch.git" "$tmp_dir"
-    cd "$tmp_dir"
-
-    echo -e "${CYAN}🛠️  正在编译源代码... (这可能需要一些时间)${NC}"
-    mkdir build && cd build
-    cmake ..
-    make -j"$(nproc)"
-
-    echo -e "${CYAN}📦 正在安装 fastfetch...${NC}"
-    sudo make install
-    
-    echo -e "${CYAN}🧹 正在清理临时文件...${NC}"
-    cd ~
-    rm -rf "$tmp_dir"
-
-    echo -e "${GREEN}🎉 fastfetch 已通过编译成功安装！${NC}"
-    exit 0
+    install_neofetch_on_bullseye
 fi
 
 
 # --- 适用于 Debian 12+ 或其他系统的标准逻辑 ---
 project_name="LinusDierheimer/fastfetch"
 
-echo -e "${CYAN}🚀 正在为 ${project_name} 寻找最新的发行版...${NC}"
+# 尝试从 apt 安装
+if apt-cache show fastfetch &>/dev/null; then
+    echo -e "${CYAN}🚀 检测到软件源中存在 fastfetch，将通过 apt 安装...${NC}"
+    sudo apt-get update
+    sudo apt-get install -y fastfetch
+    echo -e "${GREEN}🎉 fastfetch 已通过官方源成功安装！${NC}"
+    exit 0
+fi
 
-# API 请求不应使用镜像，直接访问官方地址
+# 如果 apt 中没有，则从 GitHub 下载
+echo -e "${CYAN}🚀 软件源中未找到 fastfetch，将从 GitHub 下载最新版本...${NC}"
 latest_release_info=$(wget -qO- "https://api.github.com/repos/${project_name}/releases/latest")
 latest_version=$(echo "${latest_release_info}" | jq -r '.tag_name')
 
@@ -172,7 +157,6 @@ case "${arch}" in
 esac
 
 echo -e "${CYAN}⚙️  检测到系统架构: ${arch} (对应包架构: ${deb_arch})${NC}"
-
 release_name=$(echo "${latest_release_info}" | jq -r --arg ARCH "${deb_arch}" '.assets[].name | select(contains($ARCH) and endswith(".deb"))')
 
 if [ -z "${release_name}" ]; then
@@ -181,11 +165,8 @@ if [ -z "${release_name}" ]; then
 fi
 
 release_url="${GITHUB_URL_PREFIX}https://github.com/${project_name}/releases/download/${latest_version}/${release_name}"
-
 echo -e "${CYAN}⏬ 准备从以下链接下载: ${release_url}${NC}"
-
 wget -c "${release_url}" -q --show-progress
-
 echo -e "${GREEN}✅ 下载完成。准备安装...${NC}"
 
 if [ "$EUID" -ne 0 ]; then
@@ -195,6 +176,4 @@ else
 fi
 
 rm "${release_name}"
-
 echo -e "${GREEN}🎉 fastfetch 安装/更新完成！${NC}"
-
