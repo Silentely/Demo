@@ -12,7 +12,7 @@
 #   本脚本自动化设置系统全局语言环境为简体中文。适用于现代化基于systemd的
 #   Linux发行版，如CentOS 7+、RHEL 7+、Rocky、AlmaLinux、Debian和Ubuntu。
 #
-# Project / 项目地址: https://github.com/Silentely/Demo/
+# Project / 项目地址: https://github.com/Silentely/Demo
 #
 # Usage / 使用方法:
 #   sudo bash set_locale_cn.sh
@@ -70,6 +70,40 @@ is_script_piped() {
             return 1  # Script is a regular file / 脚本是常规文件
             ;;
     esac
+}
+
+# Generate locale configuration content / 生成语言环境配置内容
+generate_locale_config() {
+    cat << 'EOF'
+LANG=zh_CN.UTF-8
+LANGUAGE="zh_CN.UTF-8"
+LC_CTYPE="zh_CN.UTF-8"
+LC_NUMERIC="zh_CN.UTF-8"
+LC_TIME="zh_CN.UTF-8"
+LC_COLLATE="zh_CN.UTF-8"
+LC_MONETARY="zh_CN.UTF-8"
+LC_MESSAGES="zh_CN.UTF-8"
+LC_PAPER="zh_CN.UTF-8"
+LC_NAME="zh_CN.UTF-8"
+LC_ADDRESS="zh_CN.UTF-8"
+LC_TELEPHONE="zh_CN.UTF-8"
+LC_MEASUREMENT="zh_CN.UTF-8"
+LC_IDENTIFICATION="zh_CN.UTF-8"
+LC_ALL="zh_CN.UTF-8"
+EOF
+}
+
+# Generate locale.gen content / 生成locale.gen内容
+generate_locale_gen() {
+    cat << 'EOF'
+# This file lists locales that you wish to have built. You can find a list
+# of valid supported locales at /usr/share/i18n/SUPPORTED, and you can add
+# user defined locales to /usr/local/share/i18n/SUPPORTED. If you change
+# this file, you need to rerun locale-gen.
+
+en_US.UTF-8 UTF-8
+zh_CN.UTF-8 UTF-8
+EOF
 }
 
 # --- Exit Handler / 退出处理器 ---
@@ -160,6 +194,7 @@ create_backup() {
     [[ -f /etc/locale.conf ]] && cp /etc/locale.conf "$BACKUP_DIR/"
     [[ -f /etc/default/locale ]] && cp /etc/default/locale "$BACKUP_DIR/"
     [[ -f /etc/locale.gen ]] && cp /etc/locale.gen "$BACKUP_DIR/"
+    [[ -f /etc/environment ]] && cp /etc/environment "$BACKUP_DIR/"
     
     _log "success" "Backup created at: $BACKUP_DIR" "备份已创建于: $BACKUP_DIR"
 }
@@ -281,34 +316,21 @@ generate_locale() {
     if [[ "$ID" == "debian" || "$ID" == "ubuntu" ]]; then
         _log "debug" "Configuring locale.gen for Debian/Ubuntu..." "正在为Debian/Ubuntu配置locale.gen..."
         
-        # Ensure locale.gen exists / 确保locale.gen存在
-        if [[ ! -f /etc/locale.gen ]]; then
-            # Create a basic locale.gen file / 创建基本的locale.gen文件
-            cat > /etc/locale.gen << EOF
-# Locale configuration
-en_US.UTF-8 UTF-8
-zh_CN.UTF-8 UTF-8
-EOF
-            _log "debug" "Created /etc/locale.gen file" "已创建/etc/locale.gen文件"
-        else
-            # Enable zh_CN.UTF-8 in existing locale.gen / 在现有locale.gen中启用zh_CN.UTF-8
-            if ! grep -q "^${TARGET_LOCALE}" /etc/locale.gen; then
-                if grep -q "^# ${TARGET_LOCALE}" /etc/locale.gen; then
-                    # Uncomment existing line / 取消注释现有行
-                    sed -i "s/^# ${TARGET_LOCALE}/${TARGET_LOCALE}/" /etc/locale.gen
-                else
-                    # Add new line / 添加新行
-                    echo "$TARGET_LOCALE UTF-8" >> /etc/locale.gen
-                fi
-                _log "debug" "Added $TARGET_LOCALE to /etc/locale.gen" "已将$TARGET_LOCALE添加到/etc/locale.gen"
-            fi
-        fi
+        # Generate new locale.gen file / 生成新的locale.gen文件
+        generate_locale_gen > /etc/locale.gen
+        _log "debug" "Created new /etc/locale.gen file" "已创建新的/etc/locale.gen文件"
         
         # Generate locales / 生成语言环境
         if command -v locale-gen &> /dev/null; then
             _log "debug" "Running locale-gen..." "正在运行locale-gen..."
             locale-gen > /dev/null 2>&1
         fi
+    fi
+    
+    # For CentOS/RHEL, generate locale using localedef / 对于CentOS/RHEL，使用localedef生成语言环境
+    if [[ "$ID" == "centos" || "$ID" == "rhel" || "$ID" == "rocky" || "$ID" == "almalinux" ]]; then
+        _log "debug" "Generating locale using localedef..." "正在使用localedef生成语言环境..."
+        localedef -v -c -i zh_CN -f UTF-8 zh_CN.UTF-8 > /dev/null 2>&1
     fi
     
     # Verify locale is now available / 验证语言环境现在是否可用
@@ -324,12 +346,35 @@ EOF
 set_locale() {
     _log "info" "Setting system locale to $TARGET_LOCALE..." "正在设置系统语言环境为 $TARGET_LOCALE..."
     
+    # Use localectl for systemd-based systems / 对于基于systemd的系统使用localectl
     if localectl set-locale LANG="$TARGET_LOCALE"; then
-        _log "success" "System locale set successfully" "系统语言环境设置成功"
+        _log "success" "System locale set using localectl" "使用localectl设置系统语言环境成功"
     else
         _log "error" "Failed to set system locale using localectl" "使用localectl设置系统语言环境失败"
         exit 1
     fi
+    
+    # Create additional configuration files for compatibility / 为兼容性创建额外的配置文件
+    case "$ID" in
+        centos|rhel|rocky|almalinux|fedora)
+            # Create /etc/locale.conf for RHEL-based systems / 为RHEL系统创建/etc/locale.conf
+            _log "debug" "Creating /etc/locale.conf..." "正在创建/etc/locale.conf..."
+            generate_locale_config > /etc/locale.conf
+            
+            # Also update /etc/environment for legacy compatibility / 为遗留兼容性更新/etc/environment
+            if [[ -f /etc/environment ]]; then
+                # Remove existing locale settings / 移除现有的语言环境设置
+                sed -i '/^LANG=/d; /^LANGUAGE=/d; /^LC_/d' /etc/environment
+            fi
+            generate_locale_config >> /etc/environment
+            _log "debug" "Updated /etc/environment" "已更新/etc/environment"
+            ;;
+        debian|ubuntu)
+            # Create /etc/default/locale for Debian/Ubuntu / 为Debian/Ubuntu创建/etc/default/locale
+            _log "debug" "Creating /etc/default/locale..." "正在创建/etc/default/locale..."
+            generate_locale_config > /etc/default/locale
+            ;;
+    esac
     
     # Verify the change / 验证更改
     local new_locale
@@ -364,6 +409,18 @@ show_completion() {
         echo "   • Backup of old settings / 旧设置备份: $BACKUP_DIR"
         echo ""
     fi
+    echo "📄 Configuration files updated / 已更新的配置文件:"
+    case "$ID" in
+        centos|rhel|rocky|almalinux|fedora)
+            echo "   • /etc/locale.conf"
+            echo "   • /etc/environment"
+            ;;
+        debian|ubuntu)
+            echo "   • /etc/default/locale"
+            echo "   • /etc/locale.gen"
+            ;;
+    esac
+    echo ""
     echo "=================================================================="
     echo "📁 Project Repository / 项目仓库: $PROJECT_URL"
     echo ""
