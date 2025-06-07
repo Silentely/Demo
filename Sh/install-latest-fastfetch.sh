@@ -19,7 +19,7 @@ handle_error() {
 # 检查并安装脚本依赖
 check_and_install_deps() {
     local missing_deps=()
-    local deps=("wget" "jq" "lsb-release" "ca-certificates" "git")
+    local deps=("wget" "jq" "lsb-release" "ca-certificates" "git" "curl")
     echo -e "${CYAN}🔍 正在检查脚本依赖...${NC}"
     for dep in "${deps[@]}"; do
         # 对于 lsb-release 包，其命令是 lsb_release
@@ -44,6 +44,24 @@ check_and_install_deps() {
     fi
 }
 
+# 检测 IP 地址并设置 GitHub 镜像
+set_github_mirror() {
+    echo -e "${CYAN}🌍 正在检测网络环境...${NC}"
+    # 使用 ipinfo.io 获取国家代码，设置5秒超时，失败则返回空。
+    local country_code
+    country_code=$(curl -s --connect-timeout 5 https://ipinfo.io/country || echo "")
+
+    # 默认前缀为空
+    GITHUB_URL_PREFIX=""
+
+    if [ "$country_code" == "CN" ]; then
+        echo -e "${YELLOW}⚠️  检测到您在中国大陆，将使用镜像加速下载...${NC}"
+        GITHUB_URL_PREFIX="https://git.99886655.xyz/"
+    else
+        echo -e "${GREEN}✅ 将使用 GitHub 官方源进行下载。${NC}"
+    fi
+}
+
 
 # --- 脚本开始 ---
 # 设置陷阱 (trap)，在接收到 ERR 信号 (任何命令失败) 时执行 handle_error 函数
@@ -52,8 +70,9 @@ trap 'handle_error $LINENO' ERR
 # set -e: 如果任何命令失败，脚本将立即退出 (这会触发上面的 trap)
 set -e
 
-# 首先执行依赖检查
+# 首先执行依赖检查和镜像设置
 check_and_install_deps
+set_github_mirror
 
 
 # --- 主逻辑开始 ---
@@ -93,7 +112,7 @@ if [ "$VERSION_CODENAME" == "bullseye" ]; then
     # 在临时目录中进行编译
     tmp_dir=$(mktemp -d)
     echo -e "${CYAN}📥 正在从 GitHub 下载源代码至 ${tmp_dir}...${NC}"
-    git clone --depth 1 https://github.com/fastfetch-cli/fastfetch.git "$tmp_dir"
+    git clone --depth 1 "${GITHUB_URL_PREFIX}https://github.com/fastfetch-cli/fastfetch.git" "$tmp_dir"
     cd "$tmp_dir"
 
     echo -e "${CYAN}🛠️  正在编译源代码... (这可能需要一些时间)${NC}"
@@ -118,7 +137,7 @@ project_name="LinusDierheimer/fastfetch"
 
 echo -e "${CYAN}🚀 正在为 ${project_name} 寻找最新的发行版...${NC}"
 
-latest_release_info=$(wget -qO- "https://api.github.com/repos/${project_name}/releases/latest")
+latest_release_info=$(wget -qO- "${GITHUB_URL_PREFIX}https://api.github.com/repos/${project_name}/releases/latest")
 latest_version=$(echo "${latest_release_info}" | jq -r '.tag_name')
 
 # 检查 fastfetch 是否已安装
@@ -160,7 +179,7 @@ if [ -z "${release_name}" ]; then
     exit 1
 fi
 
-release_url="https://github.com/${project_name}/releases/download/${latest_version}/${release_name}"
+release_url="${GITHUB_URL_PREFIX}https://github.com/${project_name}/releases/download/${latest_version}/${release_name}"
 
 echo -e "${CYAN}⏬ 准备从以下链接下载: ${release_url}${NC}"
 
