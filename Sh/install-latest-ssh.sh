@@ -1,5 +1,5 @@
-# 脚本名称: install-latest-fastfetch.sh
-# 功能: 从 GitHub 下载并安装最新版的 fastfetch (.deb 包)
+# 脚本名称: install-latest-ssh.sh
+# 功能: 从 GitHub 下载并安装最新版的 ssh登录信息 (.deb 包)
 #!/bin/bash
 
 # --- 颜色和表情符号定义 ---
@@ -99,6 +99,7 @@ install_neofetch_on_bullseye() {
     configure_neofetch
 
     echo -e "${GREEN}🎉 Neofetch 已安装并配置完成！请重新登录以查看效果。${NC}"
+    echo -e "\n${CYAN}💖 感谢使用此脚本！欢迎访问我的 GitHub 查看更多项目: https://github.com/Silentely/Demo${NC}"
     exit 0
 }
 
@@ -136,6 +137,7 @@ if apt-cache show fastfetch &>/dev/null; then
     sudo apt-get install -y fastfetch
     configure_fastfetch
     echo -e "${GREEN}🎉 fastfetch 已通过官方源成功安装！${NC}"
+    echo -e "\n${CYAN}💖 感谢使用此脚本！欢迎访问我的 GitHub 查看更多项目: https://github.com/Silentely/Demo${NC}"
     exit 0
 fi
 
@@ -196,3 +198,4 @@ fi
 rm "${release_name}"
 configure_fastfetch
 echo -e "${GREEN}🎉 fastfetch 安装/更新完成！${NC}"
+echo -e "\n${CYAN}💖 感谢使用此脚本！欢迎访问我的 GitHub 查看更多项目: https://github.com/Silentely/Demo${NC}"
