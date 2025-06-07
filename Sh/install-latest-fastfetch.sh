@@ -1,6 +1,6 @@
-#!/bin/bash
 # 脚本名称: install-latest-fastfetch.sh
 # 功能: 从 GitHub 下载并安装最新版的 fastfetch (.deb 包)
+#!/bin/bash
 
 # --- 颜色和表情符号定义 ---
 GREEN='\033[0;32m'
@@ -19,7 +19,7 @@ handle_error() {
 # 检查并安装脚本依赖
 check_and_install_deps() {
     local missing_deps=()
-    local deps=("wget" "jq" "lsb-release" "ca-certificates")
+    local deps=("wget" "jq" "lsb-release" "ca-certificates" "git")
     echo -e "${CYAN}🔍 正在检查脚本依赖...${NC}"
     for dep in "${deps[@]}"; do
         # 对于 lsb-release 包，其命令是 lsb_release
@@ -66,21 +66,49 @@ if [ -f /etc/os-release ]; then
     fi
 fi
 
-# --- Debian 11 (Bullseye) 的特殊处理逻辑 ---
+# --- Debian 11 (Bullseye) 的特殊处理逻辑：从源代码编译 ---
 if [ "$VERSION_CODENAME" == "bullseye" ]; then
     echo -e "${YELLOW}ℹ️  检测到您的系统是 Debian 11 (Bullseye)。${NC}"
-    echo -e "${CYAN}为了确保兼容性，将通过官方 backports 源进行安装...${NC}"
+    echo -e "${CYAN}为了确保兼容性，将通过编译源代码的方式进行安装...${NC}"
 
-    # 检查 backports 源是否已添加
-    if ! grep -q "bullseye-backports" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
-        echo -e "${CYAN}🔧 正在为您添加 Debian backports 软件源...${NC}"
-        echo "deb http://deb.debian.org/debian bullseye-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
-        sudo apt update
+    # 检查并安装编译所需的依赖
+    local build_deps=("build-essential" "cmake" "libpci-dev" "libvulkan-dev" "libxcb-randr0-dev" "libxrandr-dev" "libxcb-image0-dev" "libdbus-1-dev")
+    local missing_build_deps=()
+    echo -e "${CYAN}🔍 正在检查编译依赖...${NC}"
+    for dep in "${build_deps[@]}"; do
+        if ! dpkg-query -W -f='${Status}' "$dep" 2>/dev/null | grep -q "ok installed"; then
+            missing_build_deps+=("$dep")
+        fi
+    done
+
+    if [ ${#missing_build_deps[@]} -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  检测到以下编译依赖缺失: ${missing_build_deps[*]}${NC}"
+        echo -e "${CYAN}🔧 正在自动安装...${NC}"
+        sudo apt-get update
+        sudo apt-get install -y "${missing_build_deps[@]}"
+    else
+        echo -e "${GREEN}✅ 编译依赖均已满足。${NC}"
     fi
+    
+    # 在临时目录中进行编译
+    tmp_dir=$(mktemp -d)
+    echo -e "${CYAN}📥 正在从 GitHub 下载源代码至 ${tmp_dir}...${NC}"
+    git clone --depth 1 https://github.com/fastfetch-cli/fastfetch.git "$tmp_dir"
+    cd "$tmp_dir"
 
-    echo -e "${CYAN}📦 正在从 backports 安装 fastfetch...${NC}"
-    sudo apt install -t bullseye-backports fastfetch -y
-    echo -e "${GREEN}🎉 fastfetch 已通过 backports 成功安装！${NC}"
+    echo -e "${CYAN}🛠️  正在编译源代码... (这可能需要一些时间)${NC}"
+    mkdir build && cd build
+    cmake ..
+    make -j"$(nproc)"
+
+    echo -e "${CYAN}📦 正在安装 fastfetch...${NC}"
+    sudo make install
+    
+    echo -e "${CYAN}🧹 正在清理临时文件...${NC}"
+    cd ~
+    rm -rf "$tmp_dir"
+
+    echo -e "${GREEN}🎉 fastfetch 已通过编译成功安装！${NC}"
     exit 0
 fi
 
@@ -100,7 +128,6 @@ if command -v fastfetch &> /dev/null; then
     echo -e "${YELLOW}   - 当前版本: ${current_version}${NC}"
     echo -e "${GREEN}   - 最新版本: ${latest_version}${NC}"
 
-    # 检查版本是否一致
     if [ "${current_version}" == "${latest_version}" ]; then
         echo -e "${GREEN}✅ 已经是最新版本，无需任何操作。${NC}"
         exit 0
