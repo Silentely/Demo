@@ -22,6 +22,36 @@ trap 'handle_error $LINENO' ERR
 # set -e: 如果任何命令失败，脚本将立即退出 (这会触发上面的 trap)
 set -e
 
+# --- 主逻辑开始 ---
+VERSION_CODENAME=""
+# 检测操作系统和版本代号
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    if [ "$ID" == "debian" ]; then
+        VERSION_CODENAME=$(lsb_release -cs)
+    fi
+fi
+
+# --- Debian 11 (Bullseye) 的特殊处理逻辑 ---
+if [ "$VERSION_CODENAME" == "bullseye" ]; then
+    echo -e "${YELLOW}ℹ️  检测到您的系统是 Debian 11 (Bullseye)。${NC}"
+    echo -e "${CYAN}为了确保兼容性，将通过官方 backports 源进行安装...${NC}"
+
+    # 检查 backports 源是否已添加
+    if ! grep -q "bullseye-backports" /etc/apt/sources.list /etc/apt/sources.list.d/*; then
+        echo -e "${CYAN}🔧 正在为您添加 Debian backports 软件源...${NC}"
+        echo "deb http://deb.debian.org/debian bullseye-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
+        sudo apt update
+    fi
+
+    echo -e "${CYAN}📦 正在从 backports 安装 fastfetch...${NC}"
+    sudo apt install -t bullseye-backports fastfetch -y
+    echo -e "${GREEN}🎉 fastfetch 已通过 backports 成功安装！${NC}"
+    exit 0
+fi
+
+
+# --- 适用于 Debian 12+ 或其他系统的标准逻辑 ---
 project_name="LinusDierheimer/fastfetch"
 
 echo -e "${CYAN}🚀 正在为 ${project_name} 寻找最新的发行版...${NC}"
@@ -55,7 +85,6 @@ case "${arch}" in
     "armv7l")  deb_arch="armv7l" ;;
     "armv6l")  deb_arch="armv6l" ;;
     *)
-        # 错误信息会由 trap 捕获并处理
         echo "错误：您的系统架构 '${arch}' 不在支持的列表中。"
         exit 1
         ;;
@@ -70,7 +99,7 @@ if [ -z "${release_name}" ]; then
     exit 1
 fi
 
-release_url="https://github.com/LinusDierheimer/fastfetch/releases/download/${latest_version}/${release_name}"
+release_url="https://github.com/${project_name}/releases/download/${latest_version}/${release_name}"
 
 echo -e "${CYAN}⏬ 准备从以下链接下载: ${release_url}${NC}"
 
