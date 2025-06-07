@@ -1,7 +1,6 @@
 # 脚本名称: install-latest-fastfetch.sh
 # 功能: 从 GitHub 下载并安装最新版的 fastfetch (.deb 包)
 #!/bin/bash
-#!/bin/bash
 
 # --- 颜色和表情符号定义 ---
 GREEN='\033[0;32m'
@@ -138,7 +137,8 @@ project_name="LinusDierheimer/fastfetch"
 
 echo -e "${CYAN}🚀 正在为 ${project_name} 寻找最新的发行版...${NC}"
 
-latest_release_info=$(wget -qO- "${GITHUB_URL_PREFIX}https://api.github.com/repos/${project_name}/releases/latest")
+# API 请求不应使用镜像，直接访问官方地址
+latest_release_info=$(wget -qO- "https://api.github.com/repos/${project_name}/releases/latest")
 latest_version=$(echo "${latest_release_info}" | jq -r '.tag_name')
 
 # 检查 fastfetch 是否已安装
@@ -197,3 +197,4 @@ fi
 rm "${release_name}"
 
 echo -e "${GREEN}🎉 fastfetch 安装/更新完成！${NC}"
+
