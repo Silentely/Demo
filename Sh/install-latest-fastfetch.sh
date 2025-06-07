@@ -16,11 +16,45 @@ handle_error() {
     exit 1
 }
 
+# 检查并安装脚本依赖
+check_and_install_deps() {
+    local missing_deps=()
+    local deps=("wget" "jq" "lsb-release" "ca-certificates")
+    echo -e "${CYAN}🔍 正在检查脚本依赖...${NC}"
+    for dep in "${deps[@]}"; do
+        # 对于 lsb-release 包，其命令是 lsb_release
+        local cmd_name="$dep"
+        if [ "$dep" == "lsb-release" ]; then
+            cmd_name="lsb_release"
+        fi
+
+        if ! command -v "$cmd_name" &> /dev/null; then
+            missing_deps+=("$dep")
+        fi
+    done
+
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo -e "${YELLOW}⚠️  检测到以下依赖缺失: ${missing_deps[*]}${NC}"
+        echo -e "${CYAN}🔧 正在自动安装依赖...${NC}"
+        sudo apt-get update
+        sudo apt-get install -y "${missing_deps[@]}"
+        echo -e "${GREEN}✅ 依赖安装完成。${NC}"
+    else
+        echo -e "${GREEN}✅ 所有依赖均已满足。${NC}"
+    fi
+}
+
+
+# --- 脚本开始 ---
 # 设置陷阱 (trap)，在接收到 ERR 信号 (任何命令失败) 时执行 handle_error 函数
 trap 'handle_error $LINENO' ERR
 
 # set -e: 如果任何命令失败，脚本将立即退出 (这会触发上面的 trap)
 set -e
+
+# 首先执行依赖检查
+check_and_install_deps
+
 
 # --- 主逻辑开始 ---
 VERSION_CODENAME=""
@@ -38,7 +72,7 @@ if [ "$VERSION_CODENAME" == "bullseye" ]; then
     echo -e "${CYAN}为了确保兼容性，将通过官方 backports 源进行安装...${NC}"
 
     # 检查 backports 源是否已添加
-    if ! grep -q "bullseye-backports" /etc/apt/sources.list /etc/apt/sources.list.d/*; then
+    if ! grep -q "bullseye-backports" /etc/apt/sources.list /etc/apt/sources.list.d/* 2>/dev/null; then
         echo -e "${CYAN}🔧 正在为您添加 Debian backports 软件源...${NC}"
         echo "deb http://deb.debian.org/debian bullseye-backports main" | sudo tee /etc/apt/sources.list.d/backports.list
         sudo apt update
@@ -116,4 +150,3 @@ fi
 rm "${release_name}"
 
 echo -e "${GREEN}🎉 fastfetch 安装/更新完成！${NC}"
-
