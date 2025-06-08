@@ -6,7 +6,6 @@
 # Description: A tool to quickly and safely configure SSH server settings on
 #              Linux systems, focusing on security best practices.
 # Author:      @Silentely/Demo
-# Version:     2.3.1
 # ==============================================================================
 
 # --- 全局常量和颜色定义 ---
@@ -73,12 +72,21 @@ check_root() {
 show_header() {
     clear
     printf "%s\n" "=================================================================="
-    printf "  Linux SSH 安全配置脚本 (v2.3 优化版)\n"
+    printf "  Linux SSH 安全配置脚本 \n"
     printf "  项目地址: %s  %s\n" "$PROJECT_NAME" "$PROJECT_URL"
     printf "%s\n" "=================================================================="
 }
 
 show_env_info() {
+    # ASCII艺术字
+    echo "+-------------------------------------------------+"
+    echo "|     ____                               _______  |"
+    echo "|    |  _ \  ___  ___ ___  _ __ ___     |__   __| |"
+    echo "|    | | | |/ _ \/ __/ _ \| '_ \` _ \    | |      |"
+    echo "|    | |_| |  __/ (_| (_) | | | | | |   | |      |"
+    echo "|    |____/ \___|\___\___/|_| |_| |_|   |_|      |"
+    echo "|        D E M O   T O O L B O X                |"
+    echo "+-------------------------------------------------+"
     _log info "当前环境信息"
     local os distro arch time_now host
     distro=$(grep -oP '(?<=^PRETTY_NAME=").*(?="$)' /etc/os-release || lsb_release -ds || uname -s)
@@ -86,10 +94,9 @@ show_env_info() {
     os="$distro $arch"
     time_now=$(date +"%Y-%m-%d %H:%M %Z")
     host=$(hostname)
-    # 统一字段宽度4汉字+2空格，冒号对齐
-    printf "%-10s: %s%s%s\n" "主机名"   "$color_yellow" "$host" "$color_reset"
-    printf "%-10s: %s%s%s\n" "环境"     "$color_yellow" "$os" "$color_reset"
-    printf "%-10s: %s%s%s\n" "时间"     "$color_green" "$time_now" "$color_reset"
+    printf "%-12s: %s%s%s\n" "主机名"   "$color_yellow" "$host" "$color_reset"
+    printf "%-12s: %s%s%s\n" "环境"     "$color_yellow" "$os" "$color_reset"
+    printf "%-12s: %s%s%s\n" "时间"     "$color_green" "$time_now" "$color_reset"
     echo
 }
 
@@ -113,12 +120,12 @@ show_status_info() {
     connections=${connections_val:-"未知"}
     sshd_status_val=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null)
     sshd_status=${sshd_status_val:-"未知"}
-    printf "%-10s: %s%s%s\n" "端口"     "$color_yellow" "$port" "$color_reset"
-    printf "%-10s: %s%s%s\n" "密码认证" "$color_yellow" "$auth" "$color_reset"
-    printf "%-10s: %s%s%s\n" "服务状态" "$color_yellow" "$sshd_status" "$color_reset"
-    printf "%-10s: %s%s%s\n" "连接数"   "$color_yellow" "$connections" "$color_reset"
-    printf "%-10s: %s%s%s\n" "本机IP"   "$color_yellow" "$lan_ip" "$color_reset"
-    printf "%-10s: %s%s%s\n" "公网IP"   "$color_yellow" "$wan_ip" "$color_reset"
+    printf "%-12s: %s%s%s\n" "端口"     "$color_yellow" "$port" "$color_reset"
+    printf "%-12s: %s%s%s\n" "密码认证" "$color_yellow" "$auth" "$color_reset"
+    printf "%-12s: %s%s%s\n" "服务状态" "$color_yellow" "$sshd_status" "$color_reset"
+    printf "%-12s: %s%s%s\n" "连接数"   "$color_yellow" "$connections" "$color_reset"
+    printf "%-12s: %s%s%s\n" "本机IP"   "$color_yellow" "$lan_ip" "$color_reset"
+    printf "%-12s: %s%s%s\n" "公网IP"   "$color_yellow" "$wan_ip" "$color_reset"
     printf "%s\n" "------------------------------------------------------------------"
 }
 
