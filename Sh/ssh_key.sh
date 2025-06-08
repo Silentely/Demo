@@ -78,7 +78,6 @@ show_header() {
 }
 
 show_env_info() {
-    # ASCII艺术字
     echo "+-------------------------------------------------+"
     echo "|     ____                               _______  |"
     echo "|    |  _ \  ___  ___ ___  _ __ ___     |__   __| |"
@@ -94,16 +93,12 @@ show_env_info() {
     os="$distro $arch"
     time_now=$(date +"%Y-%m-%d %H:%M %Z")
     host=$(hostname)
-    printf "%-12s: %s%s%s\n" "主机名"   "$color_yellow" "$host" "$color_reset"
-    printf "%-12s: %s%s%s\n" "环境"     "$color_yellow" "$os" "$color_reset"
-    printf "%-12s: %s%s%s\n" "时间"     "$color_green" "$time_now" "$color_reset"
-    echo
-}
 
-get_sshd_config_value() {
-    local key="$1"
-    sshd -T 2>/dev/null | grep -i "^${key}" | awk '{print $2}' || \
-    grep -iE "^\s*#?\s*${key}\s+" /etc/ssh/sshd_config | awk '{print $NF}' | tail -n1
+    # 字段名全部补到6汉字（12列）
+    printf "主机名    : %s%s%s\n" "$color_yellow" "$host" "$color_reset"
+    printf "环境      : %s%s%s\n" "$color_yellow" "$os" "$color_reset"
+    printf "时间      : %s%s%s\n" "$color_green" "$time_now" "$color_reset"
+    echo
 }
 
 show_status_info() {
@@ -120,12 +115,14 @@ show_status_info() {
     connections=${connections_val:-"未知"}
     sshd_status_val=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null)
     sshd_status=${sshd_status_val:-"未知"}
-    printf "%-12s: %s%s%s\n" "端口"     "$color_yellow" "$port" "$color_reset"
-    printf "%-12s: %s%s%s\n" "密码认证" "$color_yellow" "$auth" "$color_reset"
-    printf "%-12s: %s%s%s\n" "服务状态" "$color_yellow" "$sshd_status" "$color_reset"
-    printf "%-12s: %s%s%s\n" "连接数"   "$color_yellow" "$connections" "$color_reset"
-    printf "%-12s: %s%s%s\n" "本机IP"   "$color_yellow" "$lan_ip" "$color_reset"
-    printf "%-12s: %s%s%s\n" "公网IP"   "$color_yellow" "$wan_ip" "$color_reset"
+
+    # 字段名全部补到6汉字（12列）
+    printf "端口      : %s%s%s\n" "$color_yellow" "$port" "$color_reset"
+    printf "密码认证  : %s%s%s\n" "$color_yellow" "$auth" "$color_reset"
+    printf "服务状态  : %s%s%s\n" "$color_yellow" "$sshd_status" "$color_reset"
+    printf "连接数    : %s%s%s\n" "$color_yellow" "$connections" "$color_reset"
+    printf "本机IP    : %s%s%s\n" "$color_yellow" "$lan_ip" "$color_reset"
+    printf "公网IP    : %s%s%s\n" "$color_yellow" "$wan_ip" "$color_reset"
     printf "%s\n" "------------------------------------------------------------------"
 }
 
