@@ -9,7 +9,7 @@
 </p>
 
 > **🔧 纯自用，佛系维护，如果有任何问题，请自己解决 🔧**  
-> **🕙 最后更新: 2025-06-07**
+> **🕙 最后更新: 2025-06-08**
 
 ## 📚 Shell脚本使用说明
 
@@ -92,6 +92,26 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 **使用方法**:
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/cleanup.sh)
+```
+
+### 🎨 terminal_optimizer.sh
+**脚本概述**: 
+```
+╔════════════════════════════════════════════╗
+║   终端优化美化脚本（Terminal Optimizer）  ║
+╚════════════════════════════════════════════╝
+```
+**功能**:
+- 🖥️ 优化与美化 Linux 终端体验
+- 🛠️ 自动检测主流发行版和包管理器
+- 🔧 快速配置炫酷 PS1、Git 集成与常用别名
+- 📝 历史命令增强，提升效率
+- 🧹 一键还原、无残留
+- 支持 root 和普通用户
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/terminal_optimizer.sh)
 ```
 
 ### 🔑 ssh_key.sh
@@ -207,6 +227,7 @@ statistics = {
     'install-latest-ssh.sh': '★★★★★',
     'LocaleCN.sh': '★★★★★',
     'cleanup.sh': '★★★★☆',
+    'terminal_optimizer.sh': '新脚本待统计',
     'ssh_key.sh': '★★★★☆',
     'swap.sh': '★★★☆☆',
     'ChangeMirrors.sh': '★★★☆☆',
@@ -233,7 +254,6 @@ statistics = {
 
 [github-hosts]: https://raw.githubusercontent.com/racaljk/hosts/master/hosts "hosts on Github"
 [CC-NC-SA-4.0]: https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh
-
 
 <div align="center">
   <sub>Made with ❤️ by <a href="https://github.com/Silentely">Silentely</a></sub>
