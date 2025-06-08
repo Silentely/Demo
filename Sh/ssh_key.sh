@@ -47,7 +47,88 @@ check_root() {
     fi
 }
 
-# 显示菜单
+# ==== 状态信息输出 ====
+show_status_info() {
+    local port auth connections sshd_status sshd_version lan_ip wan_ip ciphers keepalive grace_time
+    port=$(grep '^Port ' /etc/ssh/sshd_config | awk '{print $2}' | tail -n1)
+    [ -z "$port" ] && port="22"
+    auth=$(grep '^PasswordAuthentication ' /etc/ssh/sshd_config | awk '{print $2}' | tail -n1)
+    [ -z "$auth" ] && auth="未知"
+    connections=$(ss -tun | grep ":$port" | wc -l 2>/dev/null)
+    [ -z "$connections" ] && connections="未知"
+    sshd_status=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null)
+    [ -z "$sshd_status" ] && sshd_status="未知"
+    sshd_version=$(sshd -V 2>&1 | head -n1)
+    [ -z "$sshd_version" ] && sshd_version=$(sshd -v 2>&1 | head -n1)
+    lan_ip=$(hostname -I | awk '{print $1}')
+    wan_ip=$(curl -s -m 5 icanhazip.com || curl -s -m 5 ipinfo.io/ip || curl -s -m 5 ifconfig.me)
+    [ -z "$wan_ip" ] && wan_ip="获取失败"
+    ciphers=$(grep '^Ciphers ' /etc/ssh/sshd_config | awk '{print $2}' | tail -n1)
+    keepalive=$(grep '^TCPKeepAlive ' /etc/ssh/sshd_config | awk '{print $2}' | tail -n1)
+    grace_time=$(grep '^LoginGraceTime ' /etc/ssh/sshd_config | awk '{print $2}' | tail -n1)
+
+    echo -e "\n===================== SSH 运行状态 ====================="
+    _log info "端口号: $port"
+    _log info "密码认证: $auth"
+    _log info "活跃连接数: $connections"
+    _log info "SSH 服务状态: $sshd_status"
+    _log info "SSH 版本: $sshd_version"
+    _log info "本机IP: $lan_ip"
+    _log info "公网IP: $wan_ip"
+    if [ -n "$ciphers" ]; then
+        _log info "加密算法: $ciphers"
+    fi
+    if [ -n "$keepalive" ]; then
+        _log info "TCPKeepAlive: $keepalive"
+    fi
+    if [ -n "$grace_time" ]; then
+        _log info "LoginGraceTime: $grace_time"
+    fi
+    echo "========================================================"
+}
+
+# ==== SSH 连接优化 ====
+backup_ssh_config() {
+    cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak_opt_$(date +%s)
+}
+
+validate_ssh_config() {
+    sshd -t
+}
+
+restart_ssh_service() {
+    local service_name
+    service_name=$(systemctl list-units --type=service | grep -E 'ssh(d)?\.service' | awk '{print $1}' | head -n 1)
+    [ -n "$service_name" ] && systemctl restart "$service_name"
+}
+
+rollback_ssh_config() {
+    local last_bak
+    last_bak=$(ls -t /etc/ssh/sshd_config.bak_opt_* 2>/dev/null | head -n 1)
+    [ -f "$last_bak" ] && cp "$last_bak" /etc/ssh/sshd_config
+}
+
+optimize_ssh_speed() {
+    backup_ssh_config || return 1
+    {
+        echo 'Ciphers aes256-ctr,aes192-ctr,aes128-ctr'
+        echo 'TCPKeepAlive yes'
+        echo 'LoginGraceTime 30'
+    } >> /etc/ssh/sshd_config || {
+        _log error "优化 SSH 配置失败"
+        return 1
+    }
+    if validate_ssh_config; then
+        restart_ssh_service || return 1
+        _log success "SSH 连接速度已优化"
+    else
+        _log error "SSH 配置无效，执行回滚"
+        rollback_ssh_config || _log error "回滚失败，请手动恢复"
+        return 1
+    fi
+}
+
+# --- 原有 SSH 配置和菜单代码 ---
 show_menu() {
     echo
     _log info "Linux SSH 安全配置向导"
@@ -59,7 +140,6 @@ show_menu() {
     echo "--------------------------------"
 }
 
-# 选项1：仅启用密钥登录（公共密钥）
 setup_pubkey_login() {
     mkdir -p /root/.ssh
     chmod 700 /root/.ssh
@@ -75,11 +155,9 @@ setup_pubkey_login() {
     _log success "密钥登录已启用（仅允许指定公钥），密码登录已禁用"
 }
 
-# 选项2/4: 密钥生成流程
 setup_key() {
     echo -ne "$(echo -e '\033[0;34m')>> 是否已有SSH公钥？(y/n) $(echo -e '\033[0m')"
     read -r has_key
-
     if [ "$has_key" = "y" ]; then
         _log info "请粘贴您的公钥内容（支持RSA/Ed25519，按Ctrl+D结束输入）："
         temp_key=$(mktemp)
@@ -124,7 +202,6 @@ setup_key() {
     fi
 }
 
-# 应用配置
 apply_config() {
     backup_file="/etc/ssh/sshd_config.bak_$(date +%s)"
     cp /etc/ssh/sshd_config "$backup_file"
@@ -137,7 +214,6 @@ apply_config() {
     grep -q "^PubkeyAuthentication" /etc/ssh/sshd_config || echo "PubkeyAuthentication $3" >> /etc/ssh/sshd_config
 }
 
-# 安全重启SSH
 restart_ssh() {
     if ! sshd -t; then
         _log error "SSH配置存在语法错误，请检查以下问题："
@@ -170,7 +246,6 @@ restart_ssh() {
     fi
 }
 
-# 获取服务器IP地址
 get_ip_address() {
     ip=$(curl -s -m 10 icanhazip.com || curl -s -m 10 ipinfo.io/ip || curl -s -m 10 ifconfig.me)
     [ -z "$ip" ] && ip=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v "127.0.0.1" | head -n 1)
@@ -180,38 +255,45 @@ get_ip_address() {
 main() {
     check_root
     show_header
+    show_status_info
+
     mkdir -p /root/.ssh
     chmod 700 /root/.ssh
+
     while true; do
         show_menu
         echo -ne "$(echo -e '\033[0;34m')>> 请选择操作编号：$(echo -e '\033[0m')"
         read -r choice
         case $choice in
-            1)  # 仅启用密钥登录（公共密钥）
+            1)
                 setup_pubkey_login
+                optimize_ssh_speed
                 break
                 ;;
-            2)  # 仅启用密码登录（自定义密钥）
+            2)
                 setup_key
                 apply_config prohibit-password yes yes
                 _log success "密码登录已启用，自定义密钥也已配置"
+                optimize_ssh_speed
                 break
                 ;;
-            3)  # 仅启用root密码登录
+            3)
                 apply_config yes yes no
                 _log success "已启用root密码登录"
                 echo -ne "$(echo -e '\033[0;34m')>> 是否现在修改root密码？(y/n) $(echo -e '\033[0m')"
                 read -r change_pw
                 [ "$change_pw" = "y" ] && passwd root
+                optimize_ssh_speed
                 break
                 ;;
-            4)  # 同时启用密码和密钥登录
+            4)
                 setup_key
                 apply_config yes yes yes
                 _log success "密码和密钥登录均已启用"
                 echo -ne "$(echo -e '\033[0;34m')>> 是否现在修改root密码？(y/n) $(echo -e '\033[0m')"
                 read -r change_pw
                 [ "$change_pw" = "y" ] && passwd root
+                optimize_ssh_speed
                 break
                 ;;
             0)
@@ -238,7 +320,6 @@ main() {
     echo "1. 请在新窗口测试连接，确认正常后再关闭当前会话！"
     echo "2. 备份配置文件列表："
     ls -lh /etc/ssh/sshd_config.bak_*
-
     show_completion
 }
 
