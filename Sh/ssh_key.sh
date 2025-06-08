@@ -9,7 +9,7 @@
 # ==============================================================================
 
 # --- 全局常量和颜色定义 ---
-if command -v tput >/dev/null && tput setaf 1 >/dev/null; then
+if command -v tput >/dev/null && tput setaf 1 >/dev/null; 键，然后
     color_blue=$(tput setaf 4)
     color_green=$(tput setaf 2)
     color_yellow=$(tput setaf 3)
@@ -40,7 +40,7 @@ _log() {
         error)   color="$color_red"    ; tag="ERROR"   ;;
         *)       printf "%s\n" "$msg"; return ;;
     esac
-    if [[ "$type" == "error" ]]; then
+    if [[ "$type" == "error" ]]; 键，然后
         printf "${color_bold}%s:${color_reset} %s\n" "$tag" "$msg" >&2
     else
         printf "${color}%s:${color_reset} %s\n" "$tag" "$msg"
@@ -78,6 +78,7 @@ show_header() {
 }
 
 show_env_info() {
+    # ASCII艺术字
     echo "+-------------------------------------------------+"
     echo "|     ____                               _______  |"
     echo "|    |  _ \  ___  ___ ___  _ __ ___     |__   __| |"
@@ -93,12 +94,16 @@ show_env_info() {
     os="$distro $arch"
     time_now=$(date +"%Y-%m-%d %H:%M %Z")
     host=$(hostname)
-
-    # 字段名全部补到6汉字（12列）
     printf "主机名    : %s%s%s\n" "$color_yellow" "$host" "$color_reset"
     printf "环境      : %s%s%s\n" "$color_yellow" "$os" "$color_reset"
     printf "时间      : %s%s%s\n" "$color_green" "$time_now" "$color_reset"
     echo
+}
+
+get_sshd_config_value() {
+    local key="$1"
+    sshd -T 2>/dev/null | grep -i "^${key}" | awk '{print $2}' || \
+    grep -iE "^\s*#?\s*${key}\s+" /etc/ssh/sshd_config | awk '{print $NF}' | tail -n1
 }
 
 show_status_info() {
@@ -115,8 +120,6 @@ show_status_info() {
     connections=${connections_val:-"未知"}
     sshd_status_val=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null)
     sshd_status=${sshd_status_val:-"未知"}
-
-    # 字段名全部补到6汉字（12列）
     printf "端口      : %s%s%s\n" "$color_yellow" "$port" "$color_reset"
     printf "密码认证  : %s%s%s\n" "$color_yellow" "$auth" "$color_reset"
     printf "服务状态  : %s%s%s\n" "$color_yellow" "$sshd_status" "$color_reset"
@@ -139,7 +142,7 @@ update_sshd_config() {
     local key="$1"
     local value="$2"
     local config_file="/etc/ssh/sshd_config"
-    if grep -qE "^\s*#?\s*${key}\s+" "$config_file"; then
+    if grep -qE "^\s*#?\s*${key}\s+" "$config_file"; 键，然后
         sed -i -E "s/^\s*#?\s*${key}\s+.*/${key} ${value}/" "$config_file"
     else
         echo "${key} ${value}" >> "$config_file"
