@@ -9,7 +9,7 @@
 # ==============================================================================
 
 # --- 全局常量和颜色定义 ---
-if command -v tput >/dev/null && tput setaf 1 >/dev/null; 键，然后
+if command -v tput >/dev/null && tput setaf 1 >/dev/null; then
     color_blue=$(tput setaf 4)
     color_green=$(tput setaf 2)
     color_yellow=$(tput setaf 3)
@@ -40,7 +40,7 @@ _log() {
         error)   color="$color_red"    ; tag="ERROR"   ;;
         *)       printf "%s\n" "$msg"; return ;;
     esac
-    if [[ "$type" == "error" ]]; 键，然后
+    if [[ "$type" == "error" ]]; then
         printf "${color_bold}%s:${color_reset} %s\n" "$tag" "$msg" >&2
     else
         printf "${color}%s:${color_reset} %s\n" "$tag" "$msg"
@@ -142,7 +142,7 @@ update_sshd_config() {
     local key="$1"
     local value="$2"
     local config_file="/etc/ssh/sshd_config"
-    if grep -qE "^\s*#?\s*${key}\s+" "$config_file"; 键，然后
+    if grep -qE "^\s*#?\s*${key}\s+" "$config_file"; then
         sed -i -E "s/^\s*#?\s*${key}\s+.*/${key} ${value}/" "$config_file"
     else
         echo "${key} ${value}" >> "$config_file"
