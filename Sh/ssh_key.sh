@@ -30,6 +30,28 @@ show_header() {
     echo "=================================================================="
 }
 
+# ====== 艺术字和环境信息 ======
+show_env_info() {
+    echo "+-------------------------------------------------+"
+    echo "|   ____                             _______       |"
+    echo "|  |  _ \  ___  ___ ___  _ __ ___   |__   __|      |"
+    echo "|  | | | |/ _ \/ __/ _ \| '_ \` _ \     | |         |"
+    echo "|  | |_| |  __/ (_| (_) | | | | | |    | |         |"
+    echo "|  |____/ \___|\___\___/|_| |_| |_|    |_|         |"
+    echo "|         D E M O   T O O L B O X                 |"
+    echo "+-------------------------------------------------+"
+    # 运行环境
+    local os distro arch time_now
+    distro=$(awk -F= '/PRETTY_NAME/ {print $2}' /etc/os-release | tr -d '"')
+    [ -z "$distro" ] && distro=$(lsb_release -ds 2>/dev/null | tr -d '"')
+    [ -z "$distro" ] && distro=$(uname -s)
+    arch=$(uname -m)
+    os="$distro $arch"
+    time_now=$(date +"%Y-%m-%d %H:%M %Z")
+    echo "运行环境 $os"
+    echo "系统时间 $time_now"
+}
+
 show_completion() {
     echo "=================================================================="
     _log success "SSH 配置已完成"
@@ -255,7 +277,8 @@ get_ip_address() {
 main() {
     check_root
     show_header
-    show_status_info
+    show_env_info          # 艺术字与环境
+    show_status_info       # SSH 运行状态
 
     mkdir -p /root/.ssh
     chmod 700 /root/.ssh
