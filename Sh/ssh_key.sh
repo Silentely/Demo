@@ -5,7 +5,7 @@
 #
 # Description: A tool to quickly and safely configure SSH server settings on
 #              Linux systems, focusing on security best practices.
-# Author:      Gemini (Based on user's script)
+# Author:      @Silentely/Demo
 # Version:     2.3
 # ==============================================================================
 
@@ -98,9 +98,9 @@ show_env_info() {
     os="$distro $arch"
     time_now=$(date +"%Y-%m-%d %H:%M %Z")
     host=$(hostname)
-    printf "主机名        : %s%s%s\n" "$color_yellow" "$host" "$color_reset"
-    printf "运行环境      : %s%s%s\n" "$color_yellow" "$os" "$color_reset"
-    printf "系统时间      : %s%s%s\n" "$color_green" "$time_now" "$color_reset"
+    printf "%-16s: %s%s%s\n" "主机名"      "$color_yellow" "$host" "$color_reset"
+    printf "%-16s: %s%s%s\n" "运行环境"    "$color_yellow" "$os" "$color_reset"
+    printf "%-16s: %s%s%s\n" "系统时间"    "$color_green" "$time_now" "$color_reset"
     echo
 }
 
@@ -124,12 +124,12 @@ show_status_info() {
     connections=${connections_val:-"未知"}
     sshd_status_val=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null)
     sshd_status=${sshd_status_val:-"未知"}
-    printf "SSH 端口       : %s%s%s\n" "$color_yellow" "$port" "$color_reset"
-    printf "密码认证      : %s%s%s\n" "$color_yellow" "$auth" "$color_reset"
-    printf "SSH 服务状态   : %s%s%s\n" "$color_yellow" "$sshd_status" "$color_reset"
-    printf "当前连接数    : %s%s%s\n" "$color_yellow" "$connections" "$color_reset"
-    printf "本机 IP        : %s%s%s\n" "$color_yellow" "$lan_ip" "$color_reset"
-    printf "公网 IP        : %s%s%s\n" "$color_yellow" "$wan_ip" "$color_reset"
+    printf "%-16s: %s%s%s\n" "SSH 端口"      "$color_yellow" "$port" "$color_reset"
+    printf "%-16s: %s%s%s\n" "密码认证"      "$color_yellow" "$auth" "$color_reset"
+    printf "%-16s: %s%s%s\n" "SSH 服务状态"  "$color_yellow" "$sshd_status" "$color_reset"
+    printf "%-16s: %s%s%s\n" "当前连接数"    "$color_yellow" "$connections" "$color_reset"
+    printf "%-16s: %s%s%s\n" "本机 IP"       "$color_yellow" "$lan_ip" "$color_reset"
+    printf "%-16s: %s%s%s\n" "公网 IP"       "$color_yellow" "$wan_ip" "$color_reset"
     printf "%s\n" "------------------------------------------------------------------"
 }
 
@@ -305,18 +305,18 @@ main() {
 
     while true; do
         printf "\n%s%s%s\n" "$color_bold" "--- SSH 安全配置向导 ---" "$color_reset"
-        echo "1. 【作者专用】使用内置公钥登录 (禁用密码)"
-        echo "2. 【推荐】使用自定义公钥登录 (禁用密码)"
-        echo "3. 【兼容】密钥和密码登录均可"
-        echo "4. 【危险】仅密码登录 (禁用密钥)"
-        echo "5. 【高级】修改 SSH 端口"
+        echo "1. 使用内置公钥登录 (禁用密码)（作者专用）"
+        echo "2. 使用自定义公钥登录 (禁用密码)"
+        echo "3. 密钥和密码登录均可"
+        echo "4. 仅密码登录 (禁用密钥)"
+        echo "5. 修改 SSH 端口"
         echo "6. 修改 Root 用户密码"
         echo "0. 完成配置并退出"
         printf "%s\n" "------------------------------------------------------------------"
         local choice
         read -r -p "$(printf "%s>> 请选择操作编号: %s" "$color_bold" "$color_reset")" choice
         case "$choice" in
-            1) # 作者专用
+            1) # 内置密钥
                 _log warn "您选择了作者专用模式，将使用脚本内置的公钥。"
                 if ! prompt_yes_no "确认继续吗？(Y/n) "; then continue; fi
                 add_hardcoded_pubkey; optimize_ssh_speed
