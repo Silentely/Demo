@@ -6,7 +6,7 @@
 # Description: A tool to quickly and safely configure SSH server settings on
 #              Linux systems, focusing on security best practices.
 # Author:      @Silentely/Demo
-# Version:     2.3
+# Version:     2.3.1
 # ==============================================================================
 
 # --- 全局常量和颜色定义 ---
@@ -26,12 +26,10 @@ else
     color_reset='\033[0m'
 fi
 
-# --- 作者自用及项目信息 ---
 readonly PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJWYt+IEmAg9n30UBVyQgeDECsSmfS+Jwb1nO93rao0d"
 readonly PROJECT_URL="https://github.com/Silentely/Demo"
 readonly PROJECT_NAME="@Silentely/Demo"
 
-# --- 核心工具函数 ---
 _log() {
     local type="$1"
     local msg="$2"
@@ -72,7 +70,6 @@ check_root() {
     fi
 }
 
-# --- 展示类函数 ---
 show_header() {
     clear
     printf "%s\n" "=================================================================="
@@ -82,15 +79,6 @@ show_header() {
 }
 
 show_env_info() {
-    # 恢复 ASCII 艺术字效果
-    echo "+-------------------------------------------------+"
-    echo "|     ____                               _______  |"
-    echo "|    |  _ \  ___  ___ ___  _ __ ___     |__   __|    |"
-    echo "|    | | | |/ _ \/ __/ _ \| '_ \` _ \      | |        |"
-    echo "|    | |_| |  __/ (_| (_) | | | | | |     | |        |"
-    echo "|    |____/ \___|\___\___/|_| |_| |_|     |_|        |"
-    echo "|        D E M O   T O O L B O X                  |"
-    echo "+-------------------------------------------------+"
     _log info "当前环境信息"
     local os distro arch time_now host
     distro=$(grep -oP '(?<=^PRETTY_NAME=").*(?="$)' /etc/os-release || lsb_release -ds || uname -s)
@@ -98,9 +86,10 @@ show_env_info() {
     os="$distro $arch"
     time_now=$(date +"%Y-%m-%d %H:%M %Z")
     host=$(hostname)
-    printf "%-16s: %s%s%s\n" "主机名"      "$color_yellow" "$host" "$color_reset"
-    printf "%-16s: %s%s%s\n" "运行环境"    "$color_yellow" "$os" "$color_reset"
-    printf "%-16s: %s%s%s\n" "系统时间"    "$color_green" "$time_now" "$color_reset"
+    # 统一字段宽度4汉字+2空格，冒号对齐
+    printf "%-10s: %s%s%s\n" "主机名"   "$color_yellow" "$host" "$color_reset"
+    printf "%-10s: %s%s%s\n" "环境"     "$color_yellow" "$os" "$color_reset"
+    printf "%-10s: %s%s%s\n" "时间"     "$color_green" "$time_now" "$color_reset"
     echo
 }
 
@@ -124,12 +113,12 @@ show_status_info() {
     connections=${connections_val:-"未知"}
     sshd_status_val=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null)
     sshd_status=${sshd_status_val:-"未知"}
-    printf "%-16s: %s%s%s\n" "SSH 端口"      "$color_yellow" "$port" "$color_reset"
-    printf "%-16s: %s%s%s\n" "密码认证"      "$color_yellow" "$auth" "$color_reset"
-    printf "%-16s: %s%s%s\n" "SSH 服务状态"  "$color_yellow" "$sshd_status" "$color_reset"
-    printf "%-16s: %s%s%s\n" "当前连接数"    "$color_yellow" "$connections" "$color_reset"
-    printf "%-16s: %s%s%s\n" "本机 IP"       "$color_yellow" "$lan_ip" "$color_reset"
-    printf "%-16s: %s%s%s\n" "公网 IP"       "$color_yellow" "$wan_ip" "$color_reset"
+    printf "%-10s: %s%s%s\n" "端口"     "$color_yellow" "$port" "$color_reset"
+    printf "%-10s: %s%s%s\n" "密码认证" "$color_yellow" "$auth" "$color_reset"
+    printf "%-10s: %s%s%s\n" "服务状态" "$color_yellow" "$sshd_status" "$color_reset"
+    printf "%-10s: %s%s%s\n" "连接数"   "$color_yellow" "$connections" "$color_reset"
+    printf "%-10s: %s%s%s\n" "本机IP"   "$color_yellow" "$lan_ip" "$color_reset"
+    printf "%-10s: %s%s%s\n" "公网IP"   "$color_yellow" "$wan_ip" "$color_reset"
     printf "%s\n" "------------------------------------------------------------------"
 }
 
@@ -142,7 +131,6 @@ show_completion() {
     echo
 }
 
-# --- SSH 配置核心函数 ---
 update_sshd_config() {
     local key="$1"
     local value="$2"
@@ -257,7 +245,6 @@ setup_custom_key() {
     return 0
 }
 
-# 新增：修改 SSH 端口函数
 modify_ssh_port() {
     local current_port new_port
     current_port=$(get_sshd_config_value "port")
@@ -280,7 +267,6 @@ modify_ssh_port() {
     return 0
 }
 
-# 新增：自动优化 SSH 速度函数
 optimize_ssh_speed() {
     _log info "正在自动应用 SSH 连接速度优化..."
     update_sshd_config "Ciphers" "aes256-ctr,aes192-ctr,aes128-ctr"
@@ -294,13 +280,11 @@ change_root_password() {
     fi
 }
 
-# --- 主逻辑 ---
 main() {
     check_root
     show_header
     show_env_info
     show_status_info
-    
     local config_changed=false
 
     while true; do
@@ -316,7 +300,7 @@ main() {
         local choice
         read -r -p "$(printf "%s>> 请选择操作编号: %s" "$color_bold" "$color_reset")" choice
         case "$choice" in
-            1) # 内置密钥
+            1)
                 _log warn "您选择了作者专用模式，将使用脚本内置的公钥。"
                 if ! prompt_yes_no "确认继续吗？(Y/n) "; then continue; fi
                 add_hardcoded_pubkey; optimize_ssh_speed
@@ -324,7 +308,7 @@ main() {
                 update_sshd_config "PasswordAuthentication" "no"
                 update_sshd_config "PermitRootLogin" "prohibit-password"
                 config_changed=true; break ;;
-            2) # 自定义密钥登录
+            2)
                 _log info "将配置为仅限使用您自己的公钥登录。"
                 if ! setup_custom_key; then continue; fi
                 optimize_ssh_speed
@@ -332,7 +316,7 @@ main() {
                 update_sshd_config "PasswordAuthentication" "no"
                 update_sshd_config "PermitRootLogin" "prohibit-password"
                 config_changed=true; break ;;
-            3) # 密钥和密码
+            3)
                 _log info "将配置为允许密钥和密码两种登录方式。"
                 if ! setup_custom_key; then continue; fi
                 change_root_password; optimize_ssh_speed
@@ -340,7 +324,7 @@ main() {
                 update_sshd_config "PasswordAuthentication" "yes"
                 update_sshd_config "PermitRootLogin" "yes"
                 config_changed=true; break ;;
-            4) # 仅密码
+            4)
                 _log warn "警告：禁用密钥登录会降低服务器安全性！"
                 if prompt_yes_no "您确定要这样做吗？(y/N) " "n"; then
                     change_root_password; optimize_ssh_speed
@@ -351,10 +335,10 @@ main() {
                 else
                     _log info "操作已取消。"
                 fi ;;
-            5) # 修改端口
+            5)
                 if modify_ssh_port; then config_changed=true; break; fi
                 ;;
-            6) # 修改密码
+            6)
                 change_root_password ;;
             0)
                 if ! $config_changed; then
@@ -367,15 +351,13 @@ main() {
         esac
     done
 
-    # 只有在配置发生变化时才执行重启
     if $config_changed; then
         if ! validate_and_restart_ssh; then
             _log error "配置过程出现问题，请检查以上日志。"
             exit 1
         fi
     fi
-    
-    # 显示最终的连接信息
+
     local final_port final_ip
     final_port=$(get_sshd_config_value "port")
     final_ip=$(hostname -I | awk '{print $1}')
@@ -386,5 +368,4 @@ main() {
     show_completion
 }
 
-# --- 脚本入口 ---
 main "$@"
