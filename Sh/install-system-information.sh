@@ -103,14 +103,12 @@ install_neofetch_on_bullseye() {
     exit 0
 }
 
-
 # --- 脚本开始 ---
 trap 'handle_error $LINENO' ERR
 set -e
 
 check_and_install_deps
 set_github_mirror
-
 
 # --- 主逻辑开始 ---
 VERSION_CODENAME=""
@@ -125,7 +123,6 @@ fi
 if [ "$VERSION_CODENAME" == "bullseye" ]; then
     install_neofetch_on_bullseye
 fi
-
 
 # --- 适用于 Debian 12+ 或其他系统的标准逻辑 ---
 project_name="LinusDierheimer/fastfetch"
@@ -162,7 +159,6 @@ if command -v fastfetch &> /dev/null; then
 else
     echo -e "${YELLOW}ℹ️  系统中未安装 fastfetch。准备进行全新安装...${NC}"
 fi
-
 
 arch=$(uname -m)
 deb_arch=""
