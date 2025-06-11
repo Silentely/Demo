@@ -1,5 +1,5 @@
-# 脚本名称: install-latest-ssh.sh
-# 功能: 从 GitHub 下载并安装最新版的 ssh登录信息 (.deb 包)
+# 脚本名称: install- system-information.sh
+# 功能: 登录终端显示系统信息
 #!/bin/bash
 
 # --- 颜色和表情符号定义 ---
@@ -136,6 +136,8 @@ if apt-cache show fastfetch &>/dev/null; then
     sudo apt-get update
     sudo apt-get install -y fastfetch
     configure_fastfetch
+    echo -e '#!/bin/sh\nfastfetch' | sudo tee /etc/profile.d/fastfetch.sh
+    sudo chmod +x /etc/profile.d/fastfetch.sh
     echo -e "${GREEN}🎉 fastfetch 已通过官方源成功安装！${NC}"
     echo -e "\n${CYAN}💖 感谢使用此脚本！欢迎访问我的 GitHub 查看更多项目: https://github.com/Silentely/Demo${NC}"
     exit 0
