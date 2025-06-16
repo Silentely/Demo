@@ -62,6 +62,21 @@ prompt_yes_no() {
     done
 }
 
+# 新增：选择覆盖或追加公钥
+choose_overwrite_or_append() {
+    local file="$1"
+    if [[ -s "$file" ]]; then
+        _log warn "$file 已存在且非空。"
+        if prompt_yes_no "是否覆盖原有内容？(Y=覆盖，n=追加)" "n"; then
+            return 0  # 覆盖
+        else
+            return 1  # 追加
+        fi
+    else
+        return 1  # 空文件，直接追加
+    fi
+}
+
 check_root() {
     if [[ "$(id -u)" -ne 0 ]]; then
         _log error "此脚本需要以 root 权限运行，请使用 'sudo ./script.sh'。"
@@ -201,8 +216,13 @@ add_hardcoded_pubkey() {
     if grep -qF -- "$PUBKEY" "$auth_keys_file"; then
         _log info "内置公钥已存在，无需重复添加。"
     else
-        echo "$PUBKEY" >> "$auth_keys_file"
-        _log success "内置公钥已成功添加。"
+        if choose_overwrite_or_append "$auth_keys_file"; then
+            echo "$PUBKEY" > "$auth_keys_file"
+            _log success "内置公钥已覆盖写入。"
+        else
+            echo "$PUBKEY" >> "$auth_keys_file"
+            _log success "内置公钥已追加。"
+        fi
     fi
 }
 
@@ -221,8 +241,13 @@ setup_custom_key() {
         if grep -qF -- "$pubkey" "$auth_keys_file"; then
             _log info "此公钥已存在，无需重复添加。"
         else
-            echo "$pubkey" >> "$auth_keys_file"
-            _log success "公钥已成功添加至 $auth_keys_file"
+            if choose_overwrite_or_append "$auth_keys_file"; then
+                echo "$pubkey" > "$auth_keys_file"
+                _log success "公钥已覆盖写入 $auth_keys_file"
+            else
+                echo "$pubkey" >> "$auth_keys_file"
+                _log success "公钥已追加至 $auth_keys_file"
+            fi
         fi
     else
         _log info "将为您生成新的密钥对。"
@@ -236,16 +261,21 @@ setup_custom_key() {
         if [[ -f "$key_path" ]]; then
             _log warn "密钥文件 $key_path 已存在。将跳过生成。"
         else
-             _log info "正在生成 ${key_type^^} 密钥对..."
-             if ! ssh-keygen ${key_opts} -N "" -f "$key_path"; then _log error "密钥生成失败！"; return 1; fi
-             _log success "密钥已生成:"
-             printf "  公钥: %s.pub\n  私钥: %s\n" "$key_path" "$key_path"
+            _log info "正在生成 ${key_type^^} 密钥对..."
+            if ! ssh-keygen ${key_opts} -N "" -f "$key_path"; then _log error "密钥生成失败！"; return 1; fi
+            _log success "密钥已生成:"
+            printf "  公钥: %s.pub\n  私钥: %s\n" "$key_path" "$key_path"
         fi
         if grep -qF -- "$(cat "${key_path}.pub")" "$auth_keys_file"; then
-             _log info "生成的公钥已存在于 authorized_keys 文件中。"
+            _log info "生成的公钥已存在于 authorized_keys 文件中。"
         else
-             cat "${key_path}.pub" >> "$auth_keys_file"
-             _log success "生成的公钥已自动添加到 authorized_keys"
+            if choose_overwrite_or_append "$auth_keys_file"; then
+                cat "${key_path}.pub" > "$auth_keys_file"
+                _log success "生成的公钥已覆盖写入 authorized_keys"
+            else
+                cat "${key_path}.pub" >> "$auth_keys_file"
+                _log success "生成的公钥已追加到 authorized_keys"
+            fi
         fi
         _log warn "【重要】请立即下载并妥善保管您的私钥文件: $key_path"
     fi
@@ -258,7 +288,7 @@ modify_ssh_port() {
     [[ -z "$current_port" ]] && current_port="22"
 
     read -r -p "$(printf "当前端口为 %s。请输入新的 SSH 端口号 (1-65535)，或留空取消: " "$current_port")" new_port
-    
+
     if [[ -z "$new_port" ]]; then
         _log info "操作已取消。"
         return 1
@@ -268,7 +298,7 @@ modify_ssh_port() {
         _log error "无效的端口号！请输入 1-65535 之间的数字。"
         return 1
     fi
-    
+
     update_sshd_config "Port" "$new_port"
     _log success "SSH 端口已计划更改为 $new_port。"
     return 0
