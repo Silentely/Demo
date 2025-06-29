@@ -282,6 +282,37 @@ setup_custom_key() {
     return 0
 }
 
+optimize_ssh_speed() {
+    _log info "正在自动应用 SSH 连接速度优化..."
+    update_sshd_config "Ciphers" "aes256-ctr,aes192-ctr,aes128-ctr"
+    update_sshd_config "TCPKeepAlive" "yes"
+    update_sshd_config "LoginGraceTime" "30"
+}
+
+change_root_password() {
+    if prompt_yes_no "是否现在修改 root 用户的密码？(y/N) " "n"; then
+        passwd root
+    fi
+}
+
+# 新增：检测并开放 ufw 端口
+check_and_open_ufw_port() {
+    local port="${1:-22}"
+    if command -v ufw >/dev/null 2>&1; then
+        if ufw status | grep -q -E "Status: active"; then
+            if ! ufw status | grep -qw "$port"; then
+                _log info "检测到 ufw 已启用，正在开放端口 $port ..."
+                ufw allow "$port"/tcp
+                _log success "已开放 ufw 端口 $port/tcp"
+            else
+                _log info "ufw 端口 $port/tcp 已经开放"
+            fi
+        else
+            _log info "ufw 已安装但未启用"
+        fi
+    fi
+}
+
 modify_ssh_port() {
     local current_port new_port
     current_port=$(get_sshd_config_value "port")
@@ -301,20 +332,8 @@ modify_ssh_port() {
 
     update_sshd_config "Port" "$new_port"
     _log success "SSH 端口已计划更改为 $new_port。"
+    check_and_open_ufw_port "$new_port"
     return 0
-}
-
-optimize_ssh_speed() {
-    _log info "正在自动应用 SSH 连接速度优化..."
-    update_sshd_config "Ciphers" "aes256-ctr,aes192-ctr,aes128-ctr"
-    update_sshd_config "TCPKeepAlive" "yes"
-    update_sshd_config "LoginGraceTime" "30"
-}
-
-change_root_password() {
-    if prompt_yes_no "是否现在修改 root 用户的密码？(y/N) " "n"; then
-        passwd root
-    fi
 }
 
 main() {
@@ -344,6 +363,9 @@ main() {
                 update_sshd_config "PubkeyAuthentication" "yes"
                 update_sshd_config "PasswordAuthentication" "no"
                 update_sshd_config "PermitRootLogin" "prohibit-password"
+                port=$(get_sshd_config_value "port")
+                [[ -z "$port" ]] && port="22"
+                check_and_open_ufw_port "$port"
                 config_changed=true; break ;;
             2)
                 _log info "将配置为仅限使用您自己的公钥登录。"
@@ -352,6 +374,9 @@ main() {
                 update_sshd_config "PubkeyAuthentication" "yes"
                 update_sshd_config "PasswordAuthentication" "no"
                 update_sshd_config "PermitRootLogin" "prohibit-password"
+                port=$(get_sshd_config_value "port")
+                [[ -z "$port" ]] && port="22"
+                check_and_open_ufw_port "$port"
                 config_changed=true; break ;;
             3)
                 _log info "将配置为允许密钥和密码两种登录方式。"
@@ -360,6 +385,9 @@ main() {
                 update_sshd_config "PubkeyAuthentication" "yes"
                 update_sshd_config "PasswordAuthentication" "yes"
                 update_sshd_config "PermitRootLogin" "yes"
+                port=$(get_sshd_config_value "port")
+                [[ -z "$port" ]] && port="22"
+                check_and_open_ufw_port "$port"
                 config_changed=true; break ;;
             4)
                 _log warn "警告：禁用密钥登录会降低服务器安全性！"
@@ -368,6 +396,9 @@ main() {
                     update_sshd_config "PubkeyAuthentication" "no"
                     update_sshd_config "PasswordAuthentication" "yes"
                     update_sshd_config "PermitRootLogin" "yes"
+                    port=$(get_sshd_config_value "port")
+                    [[ -z "$port" ]] && port="22"
+                    check_and_open_ufw_port "$port"
                     config_changed=true; break
                 else
                     _log info "操作已取消。"
