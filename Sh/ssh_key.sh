@@ -123,20 +123,26 @@ get_sshd_config_value() {
 
 show_status_info() {
     _log info "SSH 运行状态"
-    local port auth connections sshd_status lan_ip wan_ip
+    local port auth pubkey_auth connections sshd_status lan_ip wan_ip_v4 wan_ip_v6 wan_ip
     port=$(get_sshd_config_value "port")
     [[ -z "$port" ]] && port="22"
     auth=$(get_sshd_config_value "passwordauthentication")
     [[ -z "$auth" ]] && auth="未知"
+    pubkey_auth=$(get_sshd_config_value "pubkeyauthentication")
+    [[ -z "$pubkey_auth" ]] && pubkey_auth="未知"
     lan_ip=$(hostname -I | awk '{print $1}')
-    wan_ip=$(curl -s -m 5 icanhazip.com || curl -s -m 5 ipinfo.io/ip)
-    [[ -z "$wan_ip" ]] && wan_ip="获取失败"
+    wan_ip_v4=$(curl -s --max-time 5 ip.sb -4)
+    [[ -z "$wan_ip_v4" ]] && wan_ip_v4="获取失败"
+    wan_ip_v6=$(curl -s --max-time 5 ip.sb -6)
+    [[ -z "$wan_ip_v6" ]] && wan_ip_v6="获取失败"
+    wan_ip="${wan_ip_v4}/${wan_ip_v6}"
     connections_val=$(ss -tun | grep -c ":$port" 2>/dev/null)
     connections=${connections_val:-"未知"}
     sshd_status_val=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null)
     sshd_status=${sshd_status_val:-"未知"}
     printf "端口      : %s%s%s\n" "$color_yellow" "$port" "$color_reset"
     printf "密码认证  : %s%s%s\n" "$color_yellow" "$auth" "$color_reset"
+    printf "密钥认证  : %s%s%s\n" "$color_yellow" "$pubkey_auth" "$color_reset"
     printf "服务状态  : %s%s%s\n" "$color_yellow" "$sshd_status" "$color_reset"
     printf "连接数    : %s%s%s\n" "$color_yellow" "$connections" "$color_reset"
     printf "本机IP    : %s%s%s\n" "$color_yellow" "$lan_ip" "$color_reset"
