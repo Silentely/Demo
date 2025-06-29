@@ -132,9 +132,9 @@ show_status_info() {
     [[ -z "$pubkey_auth" ]] && pubkey_auth="未知"
     lan_ip=$(hostname -I | awk '{print $1}')
     wan_ip_v4=$(curl -s --max-time 5 ip.sb -4)
-    [[ -z "$wan_ip_v4" ]] && wan_ip_v4="获取失败"
+    [[ -z "$wan_ip_v4" ]] && wan_ip_v4="IPV4获取失败"
     wan_ip_v6=$(curl -s --max-time 5 ip.sb -6)
-    [[ -z "$wan_ip_v6" ]] && wan_ip_v6="获取失败"
+    [[ -z "$wan_ip_v6" ]] && wan_ip_v6="IPV6获取失败"
     wan_ip="${wan_ip_v4}/${wan_ip_v6}"
     connections_val=$(ss -tun | grep -c ":$port" 2>/dev/null)
     connections=${connections_val:-"未知"}
