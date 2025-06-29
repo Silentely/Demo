@@ -304,17 +304,32 @@ change_root_password() {
 # 新增：检测并开放 ufw 端口
 check_and_open_ufw_port() {
     local port="${1:-22}"
-    if command -v ufw >/dev/null 2>&1; then
-        if ufw status | grep -q -E "Status: active"; then
-            if ! ufw status | grep -qw "$port"; then
-                _log info "检测到 ufw 已启用，正在开放端口 $port ..."
-                ufw allow "$port"/tcp
-                _log success "已开放 ufw 端口 $port/tcp"
-            else
-                _log info "ufw 端口 $port/tcp 已经开放"
-            fi
+    if ! command -v ufw >/dev/null 2>&1; then
+        _log warn "检测到ufw未安装，未同步打开端口"
+        return
+    fi
+
+    if ufw status | grep -q -E "Status: active"; then
+        if ! ufw status | grep -qw "$port"; then
+            _log info "检测到 ufw 已启用，正在开放端口 $port ..."
+            ufw allow "$port"/tcp
+            _log success "已开放 ufw 端口 $port/tcp"
         else
-            _log info "ufw 已安装但未启用"
+            _log info "ufw 端口 $port/tcp 已经开放"
+        fi
+    else
+        # ufw已安装但未启用
+        if ! ufw status | grep -qw "$port"; then
+            _log info "ufw 已安装但未启用，已先开放端口 $port（生效需启用ufw）"
+            ufw allow "$port"/tcp
+        else
+            _log info "ufw 已安装但未启用，端口 $port 已在规则中"
+        fi
+        if prompt_yes_no "ufw 已安装但未启用，是否同步启用ufw？(Y/n) "; then
+            ufw enable
+            _log success "ufw 已启用"
+        else
+            _log warn "ufw 未启用，端口规则未生效"
         fi
     fi
 }
