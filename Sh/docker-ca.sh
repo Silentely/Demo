@@ -117,6 +117,6 @@ else
 fi
 EOF
 
-# 配置脚本定时任务
-chmod +x $CERT_DIR/renewcert.sh
-crontab -l | { cat; echo "0 0 */15 * * bash $CERT_DIR/renewcert.sh"; } | crontab -
+# 配置脚本定时任务（避免重复添加）
+CRON_JOB="0 0 */15 * * bash $CERT_DIR/renewcert.sh"
+(crontab -l 2>/dev/null | grep -F "$CRON_JOB") || (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
