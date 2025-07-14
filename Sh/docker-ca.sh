@@ -117,6 +117,11 @@ else
 fi
 EOF
 
-# 配置脚本定时任务（避免重复添加）
+# 配置脚本定时任务
 CRON_JOB="0 0 */15 * * bash $CERT_DIR/renewcert.sh"
-(crontab -l 2>/dev/null | grep -F "$CRON_JOB") || (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+if crontab -l 2>/dev/null | grep -Fq "$CRON_JOB"; then
+    echo "已存在相同续期定时任务，取消添加"
+else
+    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    echo "续期定时任务已添加"
+fi-
