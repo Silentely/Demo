@@ -3,39 +3,89 @@
 # ==============================================================================
 # 脚本名称: terminal_optimizer.sh
 # 功能:     优化与美化 Linux 终端体验，支持主流发行版。
-# 作者:     rouxyang (原始作者) / Gemini (优化)
+# 作者:     rouxyang (原始作者) / Gemini (优化) / Silentely (改进)
 # 创建日期: 2025-04-13
+# 最后更新: 2025-06-08
 # 许可证:   MIT
+# 项目地址: https://github.com/Silentely/Demo
 # ==============================================================================
 
 # --- 全局变量 ---
 SCRIPT_VERSION="0.0.2"
 readonly LOG_FILE="/tmp/terminal_optimizer.log"
+UNINSTALL=false
+FORCE=false
 
-# --- 颜色定义 ---
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[0;33m'
-readonly BLUE='\033[0;34m'
-readonly CYAN='\033[0;36m'
-readonly NC='\033[0m' # No Color
+# 引入通用函数库
+if [ -f "../lib/common.sh" ]; then
+    source ../lib/common.sh
+elif [ -f "./lib/common.sh" ]; then
+    source ./lib/common.sh
+elif [ -f "/usr/local/lib/common.sh" ]; then
+    source /usr/local/lib/common.sh
+else
+    # 如果找不到通用函数库，则使用内置定义
+    readonly RED='\033[0;31m'
+    readonly GREEN='\033[0;32m'
+    readonly YELLOW='\033[0;33m'
+    readonly BLUE='\033[0;34m'
+    readonly CYAN='\033[0;36m'
+    readonly NC='\033[0m' # No Color
 
-# ==============================================================================
-# 辅助函数
-# ==============================================================================
+    # 日志记录函数
+    log() {
+        local type_color
+        case "$1" in
+            INFO) type_color="$BLUE" ;;
+            SUCCESS) type_color="$GREEN" ;;
+            WARN) type_color="$YELLOW" ;;
+            ERROR) type_color="$RED" ;;
+            *) echo "Invalid log type" >&2; return 1 ;;
+        esac
+        # 将日志同时输出到控制台和文件
+        echo -e "$(date '+%Y-%m-%d %H:%M:%S') ${type_color}[$1]${NC} $2" | tee -a "$LOG_FILE"
+    }
+    
+    log_info() {
+        log "INFO" "$1"
+    }
+    
+    log_success() {
+        log "SUCCESS" "$1"
+    }
+    
+    log_warn() {
+        log "WARN" "$1"
+    }
+    
+    log_error() {
+        log "ERROR" "$1"
+    }
+fi
 
-# 日志记录函数
-log() {
-    local type_color
-    case "$1" in
-        INFO) type_color="$BLUE" ;;
-        SUCCESS) type_color="$GREEN" ;;
-        WARN) type_color="$YELLOW" ;;
-        ERROR) type_color="$RED" ;;
-        *) echo "Invalid log type" >&2; return 1 ;;
-    esac
-    # 将日志同时输出到控制台和文件
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') ${type_color}[$1]${NC} $2" | tee -a "$LOG_FILE"
+# 显示帮助信息函数
+show_help() {
+    echo "终端优化美化脚本 (Terminal Optimizer)"
+    echo "用法: $0 [选项]"
+    echo ""
+    echo "选项:"
+    echo "  -h, --help       显示此帮助信息"
+    echo "  -v, --version    显示脚本版本"
+    echo "  -u, --uninstall  恢复到原始配置"
+    echo "  -f, --force      强制执行，不进行确认提示"
+    echo ""
+    echo "功能:"
+    echo "  - 优化与美化 Linux 终端体验"
+    echo "  - 自动检测主流发行版和包管理器"
+    echo "  - 快速配置炫酷 PS1、Git 集成与常用别名"
+    echo "  - 历史命令增强，提升效率"
+    echo "  - 一键还原、无残留"
+    echo "  - 支持 root 和普通用户"
+}
+
+# 显示版本信息函数
+show_version() {
+    echo "终端优化美化脚本 (Terminal Optimizer) v$SCRIPT_VERSION"
 }
 
 # 优雅退出
@@ -57,6 +107,33 @@ check_root() {
 command_exists() {
     command -v "$1" &>/dev/null
 }
+
+# 解析命令行参数
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -v|--version)
+            show_version
+            exit 0
+            ;;
+        -u|--uninstall)
+            UNINSTALL=true
+            shift
+            ;;
+        -f|--force)
+            FORCE=true
+            shift
+            ;;
+        *)
+            log_error "未知参数: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
 
 # ==============================================================================
 # 核心功能

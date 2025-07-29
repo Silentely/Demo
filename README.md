@@ -9,7 +9,41 @@
 </p>
 
 > **🔧 纯自用，佛系维护，如果有任何问题，请自己解决 🔧**  
-> **🕙 最后更新: 2025-06-08**
+> **🕙 最后更新: 2025-07-29**
+
+## 📁 项目结构
+
+```
+Demo/
+├── Sh/              # 主要的Shell脚本目录
+│   ├── system/      # 系统相关脚本
+│   ├── network/     # 网络相关脚本
+│   ├── docker/      # Docker相关脚本
+│   └── utils/       # 通用工具脚本
+├── Action/          # 自动化动作脚本
+├── Work/            # 工作相关脚本
+├── py/              # Python脚本
+├── lib/             # 公共库文件
+├── docs/            # 项目文档
+├── LICENSE          # 许可证文件
+└── README.md        # 项目说明文件
+```
+
+其中 `Sh/` 目录包含了大部分实用的Shell脚本工具，涵盖了系统优化、网络配置、环境安装等多个方面。
+
+## 🚀 快速开始
+
+选择您需要的脚本并直接运行：
+
+```bash
+# 示例：运行系统清理脚本
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/cleanup.sh)
+
+# 示例：运行Docker安装脚本
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/docker/DockerInstallation.sh)
+```
+
+查看 [使用示例文档](docs/examples.md) 获取更多详细使用方法。
 
 ## 📚 Shell脚本使用说明
 
@@ -29,10 +63,10 @@
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/install-latest-ssh.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/install-system-information.sh)
 ```
 
-### 🇨🇳 LocaleCN.sh
+### 🇨🇳 LocaleCN.sh - 简体中文环境设置工具
 **脚本概述**: 
 ```
  ______     __  __     __     __   __     ______     ______     ______    
@@ -51,8 +85,12 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/LocaleCN.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/LocaleCN.sh)
 ```
+
+**支持参数**:
+- `-h, --help`  help 显示帮助信息
+- `-f, --force` 💪 强制执行，不进行确认提示
 
 ### 🌍 gost.sh
 **脚本概述**: 
@@ -65,7 +103,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/gost.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/gost.sh)
 ```
 
 ### 💾 dd-od.sh
@@ -79,27 +117,34 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/dd-od.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/dd-od.sh)
 ```
 
-### 🧹 cleanup.sh
+### 🧹 cleanup.sh - 系统垃圾清理加速器
 **脚本概述**: 
 ```
 ⚡️ 系统垃圾清理加速器 ⚡️
 ```
-**功能**: 清理系统缓存、日志、临时文件等，释放磁盘空间
+**功能**: 
+- 🗑️ 清理系统缓存、日志、临时文件等，释放磁盘空间
+- 📊 显示清理前后的磁盘使用情况
+- 🛡️ 安全操作，避免误删重要文件
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/cleanup.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/cleanup.sh)
 ```
 
-### 🎨 terminal_optimizer.sh
+**支持参数**:
+- `-h, --help`  help 显示帮助信息
+- `-v, --verbose` 📢 详细输出模式
+- `-y, --yes` ✅ 自动确认所有操作
+
+### 🎨 terminal_optimizer.sh - 终端优化美化脚本
 **脚本概述**: 
 ```
 ╔════════════════════════════════════════════╗
 ║   终端优化美化脚本（Terminal Optimizer）  ║
-╚════════════════════════════════════════════╝
 ```
 **功能**:
 - 🖥️ 优化与美化 Linux 终端体验
@@ -107,12 +152,18 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 - 🔧 快速配置炫酷 PS1、Git 集成与常用别名
 - 📝 历史命令增强，提升效率
 - 🧹 一键还原、无残留
-- 支持 root 和普通用户
+- 👤 支持 root 和普通用户
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/terminal_optimizer.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/terminal_optimizer.sh)
 ```
+
+**支持参数**:
+- `-h, --help`  help 显示帮助信息
+- `-v, --version` 🔢 显示脚本版本
+- `-u, --uninstall` 🔙 恢复到原始配置
+- `-f, --force` 💪 强制执行，不进行确认提示
 
 ### 🔑 ssh_key.sh
 **脚本概述**: 
@@ -130,10 +181,10 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/ssh_key.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/ssh_key.sh)
 ```
 
-### 💫 swap.sh
+### 💫 swap.sh - Swap分区管理工具
 **脚本概述**: 
 ```
  ____  _      ___    ____  
@@ -143,13 +194,18 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 |____/|_____|\__\_\ |_|    
 ```
 **功能**: 
-- 一键添加或删除swap分区
-- 自定义swap大小
+- ➕ 一键添加swap分区
+- ➖ 一键删除swap分区
+- 📏 自定义swap大小
+- 🛡️ 检测OpenVZ虚拟化环境兼容性
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/swap.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/swap.sh)
 ```
+
+**支持参数**:
+- `-h, --help`  help 显示帮助信息
 
 ### 🌐 http_install.sh
 **脚本概述**: 
@@ -160,7 +216,7 @@ HTTP代理自动配置工具
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/http_install.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/http_install.sh)
 ```
 
 ### 🔄 ChangeMirrors.sh
@@ -174,20 +230,26 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/ChangeMirrors.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/ChangeMirrors.sh)
 ```
 
-### 🧼 clean_snap.sh
+### 🧼 clean_snap.sh - Snap包清理小工具
 **脚本概述**: 
 ```
 Snap包清理小工具
 ```
-**功能**: 删除系统中不再需要的旧版本snap包
+**功能**: 
+- 🗑️ 删除系统中不再需要的旧版本snap包
+- 🛑 自动关闭所有snap应用后再清理
+- 📋 安全操作，避免影响正在运行的服务
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/clean_snap.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/clean_snap.sh)
 ```
+
+**支持参数**:
+- `-h, --help`  help 显示帮助信息
 
 ### 🐳 DockerInstallation.sh
 **脚本概述**: 
@@ -200,7 +262,7 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/DockerInstallation.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/docker/DockerInstallation.sh)
 ```
 
 ### 🖥️ Network-Reinstall-System-Modify.sh
@@ -216,12 +278,18 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/Network-Reinstall-System-Modify.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/Network-Reinstall-System-Modify.sh)
 ```
+
+## 📖 文档
+
+- [目录结构说明](docs/structure.md) - 详细介绍项目目录结构
+- [使用示例](docs/examples.md) - 各个脚本的详细使用示例
+- [贡献指南](docs/contributing.md) - 如何为项目贡献代码
 
 ## 📊 脚本使用统计
 
-```python
+```
 # 使用频率统计 (仅供参考)
 statistics = {
     'install-latest-ssh.sh': '★★★★★',
@@ -239,6 +307,10 @@ statistics = {
     'Network-Reinstall-System-Modify.sh': '★☆☆☆☆'
 }
 ```
+
+## 🤝 贡献
+
+欢迎提交 Pull Request 或 Issue。请查看 [贡献指南](docs/contributing.md) 了解详情。
 
 ## License
 

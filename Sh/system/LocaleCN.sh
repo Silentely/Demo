@@ -24,6 +24,72 @@ readonly TARGET_LOCALE="zh_CN.UTF-8"
 readonly BACKUP_DIR="/tmp/locale_backup_$(date +%s)"
 readonly PROJECT_URL="https://github.com/Silentely/Demo"
 
+# 引入通用函数库
+if [ -f "../lib/common.sh" ]; then
+    source ../lib/common.sh
+elif [ -f "./lib/common.sh" ]; then
+    source ./lib/common.sh
+elif [ -f "/usr/local/lib/common.sh" ]; then
+    source /usr/local/lib/common.sh
+else
+    # 如果找不到通用函数库，则使用内置定义
+    color_red='\033[0;31m'
+    color_green='\033[0;32m'
+    color_yellow='\033[0;33m'
+    color_blue='\033[0;34m'
+    color_plain='\033[0m'
+
+    _log() {
+        local type="$1"
+        local msg_en="$2"
+        local msg_cn="$3"
+        case "$type" in
+            "info") 
+                echo -e "${color_blue}INFO / 信息:${color_plain} ${msg_en}"
+                [[ -n "$msg_cn" ]] && echo -e "${color_blue}            ${color_plain} ${msg_cn}"
+                ;;
+            "success") 
+                echo -e "${color_green}SUCCESS / 成功:${color_plain} ${msg_en}"
+                [[ -n "$msg_cn" ]] && echo -e "${color_green}               ${color_plain} ${msg_cn}"
+                ;;
+            "warn") 
+                echo -e "${color_yellow}WARNING / 警告:${color_plain} ${msg_en}"
+                [[ -n "$msg_cn" ]] && echo -e "${color_yellow}               ${color_plain} ${msg_cn}"
+                ;;
+            "error") 
+                echo -e "${color_red}ERROR / 错误:${color_plain} ${msg_en}"
+                [[ -n "$msg_cn" ]] && echo -e "${color_red}             ${color_plain} ${msg_cn}"
+                ;;
+        esac
+    }
+    
+    log_info() {
+        _log "info" "$1" "$2"
+    }
+    
+    log_success() {
+        _log "success" "$1" "$2"
+    }
+    
+    log_warn() {
+        _log "warn" "$1" "$2"
+    }
+    
+    log_error() {
+        _log "error" "$1" "$2"
+    }
+    
+    show_help() {
+        echo "用法: $0 [选项]"
+        echo "选项:"
+        echo "  -h, --help     显示帮助信息"
+        echo "  -f, --force    强制执行，不进行确认提示"
+        echo ""
+        echo "功能: 一键设置系统全局语言环境为简体中文"
+        echo "支持各种主流Linux发行版（CentOS、Debian、Ubuntu等）"
+    }
+fi
+
 # --- Helper Functions for Colored Output / 彩色输出辅助函数 ---
 _log() {
     local type="$1"
