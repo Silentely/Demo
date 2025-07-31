@@ -124,4 +124,4 @@ if crontab -l 2>/dev/null | grep -Fq "$CRON_JOB"; then
 else
     (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
     echo "续期定时任务已添加"
-fi-
+fi
