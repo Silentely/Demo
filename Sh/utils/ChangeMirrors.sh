@@ -5,6 +5,33 @@
 ## Github: https://github.com/SuperManito/LinuxMirrors
 ## Gitee: https://gitee.com/SuperManito/LinuxMirrors
 
+# 安全选项与兼容设置
+set -euo pipefail
+IFS=$'\n\t'
+
+# 通用命令检测函数
+need_cmd() {
+    command -v "$1" >/dev/null 2>&1 || {
+        echo -e "\n${ERROR:-[ERROR]} 缺少必要命令: $1\n"
+        exit 1
+    }
+}
+
+# 通用 yes/no 读取，返回 0=yes 1=no 2=invalid
+ask_yes_no() {
+    local prompt="${1:-[Y/n]}"
+    local input=""
+    read -r -p "${prompt} " input || true
+    if [ -z "${input:-}" ]; then
+        input="Y"
+    fi
+    case "${input}" in
+        [Yy]|[Yy][Ee][Ss]) return 0 ;;
+        [Nn]|[Nn][Oo]) return 1 ;;
+        *) return 2 ;;
+    esac
+}
+
 function AuthorSignature() {
     echo -e "\n${GREEN} ------------ 脚本执行结束 ------------ ${PLAIN}\n"
     echo -e " \033[1;34m官方网站\033[0m https://supermanito.github.io/LinuxMirrors\n"
@@ -60,45 +87,51 @@ function Combin_Function() {
 ## 系统判定变量
 function EnvJudgment() {
     ## 判定当前系统基于 Debian or RedHat
-    if [ -s $RedHatRelease ]; then
-        SYSTEM_FACTIONS=${SYSTEM_REDHAT}
-    elif [ -s $DebianVersion ]; then
-        SYSTEM_FACTIONS=${SYSTEM_DEBIAN}
+    if [ -s "$RedHatRelease" ]; then
+        SYSTEM_FACTIONS="${SYSTEM_REDHAT}"
+    elif [ -s "$DebianVersion" ]; then
+        SYSTEM_FACTIONS="${SYSTEM_DEBIAN}"
     else
         echo -e "\n$ERROR 无法判断当前运行环境，请先确认本脚本针对当前操作系统是否适配\n"
-        exit
+        exit 1
     fi
-    ## 定义系统名称
-    SYSTEM_NAME=$(cat $LinuxRelease | grep -E "^NAME=" | awk -F '=' '{print$2}' | sed "s/[\'\"]//g")
-    ## 定义系统版本号
-    SYSTEM_VERSION_NUMBER=$(cat $LinuxRelease | grep -E "VERSION_ID=" | awk -F '=' '{print$2}' | sed "s/[\'\"]//g")
+    ## 定义系统名称/版本号（稳健解析）
+    if [ -r "$LinuxRelease" ]; then
+        # shellcheck disable=SC1091
+        . "$LinuxRelease"
+        SYSTEM_NAME="${NAME:-Unknown}"
+        SYSTEM_VERSION_NUMBER="${VERSION_ID:-Unknown}"
+    else
+        SYSTEM_NAME="$(grep -E '^NAME=' "$LinuxRelease" 2>/dev/null | awk -F '=' '{print $2}' | sed "s/[\'\"]//g" || true)"
+        SYSTEM_VERSION_NUMBER="$(grep -E '^VERSION_ID=' "$LinuxRelease" 2>/dev/null | awk -F '=' '{print $2}' | sed "s/[\'\"]//g" || true)"
+    fi
     ## 判定系统名称、版本、版本号
-    case ${SYSTEM_FACTIONS} in
+    case "${SYSTEM_FACTIONS}" in
     Debian)
         if [ ! -x /usr/bin/lsb_release ]; then
-            apt-get install -y lsb-release
-            if [ $? -eq 0 ]; then
+            apt-get update -y >/dev/null 2>&1 || true
+            if apt-get install -y lsb-release; then
                 clear
             else
                 echo -e "\n$ERROR lsb-release 软件包安装失败"
-                echo -e "\n本脚本需要通过 lsb_release 指令判断系统类型，当前可能为精简安装的系统一般系统自带，请自行安装后重新执行脚本！\n"
-                exit
+                echo -e "\n本脚本需要通过 lsb_release 指令判断系统类型，请自行安装后重新执行脚本！\n"
+                exit 1
             fi
         fi
-        SYSTEM_JUDGMENT=$(${DebianRelease} -is)
-        SYSTEM_VERSION=$(${DebianRelease} -cs)
+        SYSTEM_JUDGMENT="$(${DebianRelease} -is)"
+        SYSTEM_VERSION="$(${DebianRelease} -cs)"
         ;;
     RedHat)
-        SYSTEM_JUDGMENT=$(cat $RedHatRelease | sed 's/ //g' | cut -c1-6)
-        if [[ ${SYSTEM_JUDGMENT} = ${SYSTEM_CENTOS} || ${SYSTEM_JUDGMENT} = ${SYSTEM_RHEL} ]]; then
-            CENTOS_VERSION=$(echo ${SYSTEM_VERSION_NUMBER} | cut -c1)
+        SYSTEM_JUDGMENT="$(tr -d ' ' < "$RedHatRelease" | cut -c1-6)"
+        if [[ "${SYSTEM_JUDGMENT}" = "${SYSTEM_CENTOS}" || "${SYSTEM_JUDGMENT}" = "${SYSTEM_RHEL}" ]]; then
+            CENTOS_VERSION="$(echo "${SYSTEM_VERSION_NUMBER}" | cut -c1)"
         else
             CENTOS_VERSION=""
         fi
         ;;
     esac
     ## 判定系统处理器架构
-    case ${ARCH} in
+    case "$(uname -m)" in
     x86_64)
         SYSTEM_ARCH="x86_64"
         ;;
@@ -111,27 +144,26 @@ function EnvJudgment() {
     armv6l)
         SYSTEM_ARCH="ARMv6"
         ;;
-    i686)
+    i386|i486|i586|i686)
         SYSTEM_ARCH="x86_32"
         ;;
     *)
-        SYSTEM_ARCH=${ARCH}
+        SYSTEM_ARCH="$(uname -m)"
         ;;
     esac
     ## 定义软件源分支名称
-    if [ ${SYSTEM_JUDGMENT} = ${SYSTEM_UBUNTU} ]; then
-        if [ ${ARCH} = "x86_64" ] || [ ${ARCH} = "*i?86*" ]; then
-            SOURCE_BRANCH=${SYSTEM_JUDGMENT,,}
-        else
-            SOURCE_BRANCH=ubuntu-ports
-        fi
-    elif [ ${SYSTEM_JUDGMENT} = ${SYSTEM_RHEL} ]; then
+    if [ "${SYSTEM_JUDGMENT}" = "${SYSTEM_UBUNTU}" ]; then
+        case "$(uname -m)" in
+            x86_64|i386|i486|i586|i686) SOURCE_BRANCH="${SYSTEM_JUDGMENT,,}" ;;
+            *) SOURCE_BRANCH="ubuntu-ports" ;;
+        esac
+    elif [ "${SYSTEM_JUDGMENT}" = "${SYSTEM_RHEL}" ]; then
         SOURCE_BRANCH="centos"
     else
-        SOURCE_BRANCH=${SYSTEM_JUDGMENT,,}
+        SOURCE_BRANCH="${SYSTEM_JUDGMENT,,}"
     fi
     ## 定义软件源同步/更新文字
-    case ${SYSTEM_FACTIONS} in
+    case "${SYSTEM_FACTIONS}" in
     Debian)
         SYNC_TXT="更新"
         ;;
@@ -144,9 +176,9 @@ function EnvJudgment() {
 ## 环境判定
 function PermissionJudgment() {
     ## 权限判定
-    if [ $UID -ne 0 ]; then
-        echo -e "\n$ERROR 权限不足，请使用 Root 用户\n"
-        exit
+    if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+        echo -e "\n$ERROR 权限不足，请使用 Root 用户（例如：sudo bash ChangeMirrors.sh）\n"
+        exit 1
     fi
 }
 
@@ -155,12 +187,12 @@ function CloseFirewall() {
     systemctl status firewalld | grep running -q
     if [ $? -eq 0 ]; then
         CHOICE_C=$(echo -e "\n${BOLD}└─ 是否关闭防火墙和 SELinux ? [Y/n] ${PLAIN}")
-        read -p "${CHOICE_C}" INPUT
-        [ -z ${INPUT} ] && INPUT=Y
-        case $INPUT in
+        read -r -p "${CHOICE_C}" INPUT || true
+        [ -z "${INPUT:-}" ] && INPUT=Y
+        case "$INPUT" in
         [Yy] | [Yy][Ee][Ss])
             systemctl disable --now firewalld >/dev/null 2>&1
-            [ -s $SelinuxConfig ] && sed -i "s/SELINUX=enforcing/SELINUX=disabled/g" $SelinuxConfig && setenforce 0 >/dev/null 2>&1
+            [ -s "$SelinuxConfig" ] && sed -i "s/SELINUX=enforcing/SELINUX=disabled/g" "$SelinuxConfig" && setenforce 0 >/dev/null 2>&1
             ;;
         [Nn] | [Nn][Oo]) ;;
         *)
@@ -172,32 +204,32 @@ function CloseFirewall() {
 
 ## 备份原有源
 function BackupMirrors() {
-    if [ ${SYSTEM_FACTIONS} = ${SYSTEM_DEBIAN} ]; then
-        ## 判断 /etc/apt/sources.list.d 目录下是否存在文件
-        [ -d $DebianExtendListDir ] && ls $DebianExtendListDir | grep *.list -q
-        VERIFICATION_FILES=$?
-        ## 判断 /etc/apt/sources.list.d.bak 目录下是否存在文件
-        [ -d $DebianExtendListDirBackup ] && ls $DebianExtendListDirBackup | grep *.list -q
-        VERIFICATION_BACKUPFILES=$?
-    elif [ ${SYSTEM_FACTIONS} = ${SYSTEM_REDHAT} ]; then
-        ## 判断 /etc/yum.repos.d 目录下是否存在文件
-        [ -d $RedHatReposDir ] && ls $RedHatReposDir | grep repo -q
-        VERIFICATION_FILES=$?
-        ## 判断 /etc/yum.repos.d.bak 目录下是否存在文件
-        [ -d $RedHatReposDirBackup ] && ls $RedHatReposDirBackup | grep repo -q
-        VERIFICATION_BACKUPFILES=$?
-    fi
+    shopt -s nullglob
 
-    if [ ${SYSTEM_FACTIONS} = ${SYSTEM_DEBIAN} ]; then
+    if [ "${SYSTEM_FACTIONS}" = "${SYSTEM_DEBIAN}" ]; then
+        local VERIFICATION_FILES=1 VERIFICATION_BACKUPFILES=1
+        if [ -d "$DebianExtendListDir" ]; then
+            set +e
+            ls "$DebianExtendListDir"/*.list >/dev/null 2>&1
+            VERIFICATION_FILES=$?
+            set -e
+        fi
+        if [ -d "$DebianExtendListDirBackup" ]; then
+            set +e
+            ls "$DebianExtendListDirBackup"/*.list >/dev/null 2>&1
+            VERIFICATION_BACKUPFILES=$?
+            set -e
+        fi
+
         ## /etc/apt/sources.list
-        if [ -s $DebianSourceList ]; then
-            if [ -s $DebianSourceListBackup ]; then
+        if [ -s "$DebianSourceList" ]; then
+            if [ -s "$DebianSourceListBackup" ]; then
                 CHOICE_BACKUP1=$(echo -e "\n${BOLD}└─ 检测到系统存在已备份的 list 源文件，是否覆盖备份? [Y/n] ${PLAIN}")
-                read -p "${CHOICE_BACKUP1}" INPUT
-                [ -z ${INPUT} ] && INPUT=Y
-                case $INPUT in
+                read -r -p "${CHOICE_BACKUP1}" INPUT || true
+                [ -z "${INPUT:-}" ] && INPUT=Y
+                case "$INPUT" in
                 [Yy] | [Yy][Ee][Ss])
-                    cp -rf $DebianSourceList $DebianSourceListBackup >/dev/null 2>&1
+                    cp -a "$DebianSourceList" "$DebianSourceListBackup" >/dev/null 2>&1
                     ;;
                 [Nn] | [Nn][Oo]) ;;
                 *)
@@ -205,24 +237,24 @@ function BackupMirrors() {
                     ;;
                 esac
             else
-                cp -rf $DebianSourceList $DebianSourceListBackup >/dev/null 2>&1
+                cp -a "$DebianSourceList" "$DebianSourceListBackup" >/dev/null 2>&1
                 echo -e "\n$COMPLETE 已备份原有 list 源文件至 $DebianSourceListBackup"
                 sleep 1s
             fi
         else
-            [ -f $DebianSourceList ] || touch $DebianSourceList
+            [ -f "$DebianSourceList" ] || touch "$DebianSourceList"
             echo -e ''
         fi
 
         ## /etc/apt/sources.list.d
-        if [ -d $DebianExtendListDir ] && [ ${VERIFICATION_FILES} -eq 0 ]; then
-            if [ -d $DebianExtendListDirBackup ] && [ ${VERIFICATION_BACKUPFILES} -eq 0 ]; then
+        if [ -d "$DebianExtendListDir" ] && [ ${VERIFICATION_FILES} -eq 0 ]; then
+            if [ -d "$DebianExtendListDirBackup" ] && [ ${VERIFICATION_BACKUPFILES} -eq 0 ]; then
                 CHOICE_BACKUP2=$(echo -e "\n${BOLD}└─ 检测到系统存在已备份的 list 第三方源文件，是否覆盖备份? [Y/n] ${PLAIN}")
-                read -p "${CHOICE_BACKUP2}" INPUT
-                [ -z ${INPUT} ] && INPUT=Y
-                case $INPUT in
+                read -r -p "${CHOICE_BACKUP2}" INPUT || true
+                [ -z "${INPUT:-}" ] && INPUT=Y
+                case "$INPUT" in
                 [Yy] | [Yy][Ee][Ss])
-                    cp -rf $DebianExtendListDir/* $DebianExtendListDirBackup >/dev/null 2>&1
+                    cp -a "$DebianExtendListDir/"*.list "$DebianExtendListDirBackup" >/dev/null 2>&1 || true
                     ;;
                 [Nn] | [Nn][Oo]) ;;
                 *)
@@ -230,22 +262,36 @@ function BackupMirrors() {
                     ;;
                 esac
             else
-                [ -d $DebianExtendListDirBackup ] || mkdir -p $DebianExtendListDirBackup
-                cp -rf $DebianExtendListDir/* $DebianExtendListDirBackup >/dev/null 2>&1
+                [ -d "$DebianExtendListDirBackup" ] || mkdir -p "$DebianExtendListDirBackup"
+                cp -a "$DebianExtendListDir/"*.list "$DebianExtendListDirBackup" >/dev/null 2>&1 || true
                 echo -e "$COMPLETE 已备份原有 list 第三方源文件至 $DebianExtendListDirBackup 目录"
                 sleep 1s
             fi
         fi
-    elif [ ${SYSTEM_FACTIONS} = ${SYSTEM_REDHAT} ]; then
+    elif [ "${SYSTEM_FACTIONS}" = "${SYSTEM_REDHAT}" ]; then
+        local VERIFICATION_FILES=1 VERIFICATION_BACKUPFILES=1
+        if [ -d "$RedHatReposDir" ]; then
+            set +e
+            ls "$RedHatReposDir"/*.repo >/dev/null 2>&1
+            VERIFICATION_FILES=$?
+            set -e
+        fi
+        if [ -d "$RedHatReposDirBackup" ]; then
+            set +e
+            ls "$RedHatReposDirBackup"/*.repo >/dev/null 2>&1
+            VERIFICATION_BACKUPFILES=$?
+            set -e
+        fi
+
         ## /etc/yum.repos.d
         if [ ${VERIFICATION_FILES} -eq 0 ]; then
-            if [ -d $RedHatReposDirBackup ] && [ ${VERIFICATION_BACKUPFILES} -eq 0 ]; then
+            if [ -d "$RedHatReposDirBackup" ] && [ ${VERIFICATION_BACKUPFILES} -eq 0 ]; then
                 CHOICE_BACKUP3=$(echo -e "\n${BOLD}└─ 检测到系统存在已备份的 repo 源文件，是否覆盖备份? [Y/n] ${PLAIN}")
-                read -p "${CHOICE_BACKUP3}" INPUT
-                [ -z ${INPUT} ] && INPUT=Y
-                case $INPUT in
+                read -r -p "${CHOICE_BACKUP3}" INPUT || true
+                [ -z "${INPUT:-}" ] && INPUT=Y
+                case "$INPUT" in
                 [Yy] | [Yy][Ee][Ss])
-                    cp -rf $RedHatReposDir/* $RedHatReposDirBackup >/dev/null 2>&1
+                    cp -a "$RedHatReposDir/"*.repo "$RedHatReposDirBackup" >/dev/null 2>&1 || true
                     ;;
                 [Nn] | [Nn][Oo]) ;;
                 *)
@@ -253,27 +299,32 @@ function BackupMirrors() {
                     ;;
                 esac
             else
-                [ -d $RedHatReposDirBackup ] || mkdir -p $RedHatReposDirBackup
-                cp -rf $RedHatReposDir/* $RedHatReposDirBackup >/dev/null 2>&1
+                [ -d "$RedHatReposDirBackup" ] || mkdir -p "$RedHatReposDirBackup"
+                cp -a "$RedHatReposDir/"*.repo "$RedHatReposDirBackup" >/dev/null 2>&1 || true
                 echo -e "\n$COMPLETE 已备份原有 repo 源文件至 $RedHatReposDirBackup 目录"
                 sleep 1s
             fi
         else
-            [ -d $RedHatReposDir ] || mkdir -p $RedHatReposDir
+            [ -d "$RedHatReposDir" ] || mkdir -p "$RedHatReposDir"
         fi
     fi
+
+    shopt -u nullglob
 }
 
 ## 删除原有源
 function RemoveOldMirrorsFiles() {
-    if [ ${SYSTEM_FACTIONS} = ${SYSTEM_DEBIAN} ]; then
-        [ -f $DebianSourceList ] && sed -i '1,$d' $DebianSourceList
-    elif [ ${SYSTEM_FACTIONS} = ${SYSTEM_REDHAT} ]; then
-        if [ -d $RedHatReposDir ]; then
-            if [ -f $RedHatReposDir/epel.repo ]; then
-                ls $RedHatReposDir/ | egrep -v epel | xargs rm -rf
+    if [ "${SYSTEM_FACTIONS}" = "${SYSTEM_DEBIAN}" ]; then
+        [ -f "$DebianSourceList" ] && : > "$DebianSourceList"
+    elif [ "${SYSTEM_FACTIONS}" = "${SYSTEM_REDHAT}" ]; then
+        if [ -d "$RedHatReposDir" ]; then
+            if [ -f "$RedHatReposDir/epel.repo" ]; then
+                for f in "$RedHatReposDir"/*.repo; do
+                    [ "$(basename "$f")" = "epel.repo" ] && continue
+                    rm -f -- "$f"
+                done
             else
-                rm -rf $RedHatReposDir/*
+                rm -f -- "$RedHatReposDir"/*.repo 2>/dev/null || true
             fi
         fi
     fi
@@ -287,31 +338,32 @@ function ChangeMirrors() {
         RedHatMirrors
     fi
     echo -e "\n${WORKING} 开始${SYNC_TXT}软件源...\n"
-    case ${SYSTEM_FACTIONS} in
+    case "${SYSTEM_FACTIONS}" in
     Debian)
-        apt-get update
+        apt-get update || true
+        VERIFICATION_SOURCESYNC=$?
         ;;
     RedHat)
-        yum makecache
+        yum makecache || true
+        VERIFICATION_SOURCESYNC=$?
         ;;
     esac
-    VERIFICATION_SOURCESYNC=$?
-    if [ ${VERIFICATION_SOURCESYNC} -eq 0 ]; then
+    if [ "${VERIFICATION_SOURCESYNC}" -eq 0 ]; then
         echo -e "\n$COMPLETE 软件源更换完毕"
     else
         echo -e "\n$ERROR 软件源${SYNC_TXT}失败\n"
-        echo -e "请再次执行脚本并更换软件源后进行尝试，如果仍然${SYNC_TXT}失败那么可能由以下原因导致"
+        echo -e "请再次执行脚本并更换软件源后进行尝试，如果仍然${SYNC_TXT}失败可能由以下原因导致"
         echo -e "1. 网络问题：例如网络异常、网络间歇式中断、由地区影响的网络因素等"
-        echo -e "2. 软件源问题：所选镜像站正在维护，或者出现罕见的少数文件同步出错导致软件源${SYNC_TXT}命令执行后返回错误状态"
+        echo -e "2. 软件源问题：镜像站维护或个别文件同步异常导致错误返回"
         echo ''
-        exit
+        exit 1
     fi
 }
 
 ## 更新软件包
 function UpgradeSoftware() {
     CHOICE_B=$(echo -e "\n${BOLD}└─ 是否更新软件包? [Y/n] ${PLAIN}")
-    read -p "${CHOICE_B}" INPUT
+    read -r -p "${CHOICE_B}" INPUT
     [ -z ${INPUT} ] && INPUT=Y
     case $INPUT in
     [Yy] | [Yy][Ee][Ss])
@@ -325,7 +377,7 @@ function UpgradeSoftware() {
             ;;
         esac
         CHOICE_C=$(echo -e "\n${BOLD}└─ 是否清理已下载的软件包缓存? [Y/n] ${PLAIN}")
-        read -p "${CHOICE_C}" INPUT
+        read -r -p "${CHOICE_C}" INPUT
         [ -z ${INPUT} ] && INPUT=Y
         case $INPUT in
         [Yy] | [Yy][Ee][Ss])
@@ -411,8 +463,10 @@ function RedHatMirrors() {
         ## CentOS 8 操作系统版本结束了生命周期（EOL），Linux 社区已不再维护该操作系统版本，最终版本为 8.5.2011
         ## 原 centos 镜像中的 CentOS 8 相关内容已被官方移动，从 2022-02 开始切换至 centos-vault 源
         if [ ${CENTOS_VERSION} -eq "8" ]; then
-            sed -i 's|^#baseurl=http://mirror.centos.org/$contentdir|#baseurl=http://mirror.centos.org/centos-vault|g' ${SYSTEM_CENTOS}-*
-            sed -i "s/\$releasever/8.5.2111/g" ${SYSTEM_CENTOS}-*
+            if ls ${SYSTEM_CENTOS}-* >/dev/null 2>&1; then
+                sed -i 's|^#baseurl=http://mirror.centos.org/\$contentdir|#baseurl=http://mirror.centos.org/centos-vault|g' ${SYSTEM_CENTOS}-*
+                grep -R "\$releasever" ${SYSTEM_CENTOS}-* >/dev/null 2>&1 && sed -i "s/\$releasever/8.5.2111/g" ${SYSTEM_CENTOS}-*
+            fi
         fi
 
         ## WEB协议
@@ -446,7 +500,7 @@ function RedHatMirrors() {
             ${SOURCE_BRANCH}-modular.repo \
             ${SOURCE_BRANCH}-updates-modular.repo \
             ${SOURCE_BRANCH}-updates-testing.repo \
-            ${SOURCE_BRANCH}-updates-testing-modular.repo
+            ${SOURCE_BRANCH}-updates-testing-modular.repo || true
     fi
     ## 清理 yum 缓存
     yum clean all >/dev/null 2>&1
@@ -457,11 +511,14 @@ function EPELMirrors() {
     ## 安装 EPEL 软件包
     if [ ${VERIFICATION_EPEL} -ne 0 ]; then
         echo -e "\n${WORKING} 安装 epel-release 软件包...\n"
-        yum install -y https://mirrors.aliyun.com/epel/epel-release-latest-${CENTOS_VERSION}.noarch.rpm
+        if ! yum install -y "https://mirrors.aliyun.com/epel/epel-release-latest-${CENTOS_VERSION}.noarch.rpm"; then
+            echo -e "\n$WARN 阿里云 EPEL 安装失败，尝试官方地址...\n"
+            yum install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${CENTOS_VERSION}.noarch.rpm"
+        fi
     fi
     ## 删除原有 EPEL 扩展 repo 源文件
-    [ ${VERIFICATION_EPELFILES} -eq 0 ] && rm -rf $RedHatReposDir/epel*
-    [ ${VERIFICATION_EPELBACKUPFILES} -eq 0 ] && rm -rf $RedHatReposDirBackup/epel*
+    [ ${VERIFICATION_EPELFILES} -eq 0 ] && rm -f "$RedHatReposDir"/epel* 2>/dev/null || true
+    [ ${VERIFICATION_EPELBACKUPFILES} -eq 0 ] && rm -f "$RedHatReposDirBackup"/epel* 2>/dev/null || true
     ## 生成官方 EPEL 扩展 repo 源文件
     EPELReposCreate
     ## 更换国内源
@@ -475,7 +532,7 @@ function EPELMirrors() {
         ;;
     esac
     sed -i "s|download.fedoraproject.org/pub|${SOURCE}|g" $RedHatReposDir/epel*
-    rm -rf $RedHatReposDir/epel*rpmnew
+    rm -f "$RedHatReposDir"/epel*.rpmnew 2>/dev/null || true
 }
 
 ## 选择国内源
@@ -512,7 +569,7 @@ function ChooseMirrors() {
         esac
 
         CHOICE_A_TMP=$(echo -e "\n  ${BOLD}└─ 默认使用镜像站的公网地址，是否继续? [Y/n] ${PLAIN}")
-        read -p "${CHOICE_A_TMP}" INPUT
+        read -r -p "${CHOICE_A_TMP}" INPUT
         [ -z ${INPUT} ] && INPUT=Y
         case $INPUT in
         [Yy] | [Yy][Ee][Ss])
@@ -568,7 +625,7 @@ function ChooseMirrors() {
     echo -e ''
     echo -e '#####################################################'
     CHOICE_A=$(echo -e "\n${BOLD}└─ 请选择并输入你想使用的软件源 [ 1-13 ]：${PLAIN}")
-    read -p "${CHOICE_A}" INPUT
+    read -r -p "${CHOICE_A}" INPUT
     case $INPUT in
     1 | 2 | 3)
         Cloud_Computing_Vendors_Mirrors $INPUT
@@ -627,7 +684,7 @@ function ChooseMirrors() {
         else
             CHOICE_D=$(echo -e "\n  ${BOLD}└─ 是否安装 EPEL 扩展源? [Y/n] ${PLAIN}")
         fi
-        read -p "${CHOICE_D}" INPUT
+        read -r -p "${CHOICE_D}" INPUT
         [ -z ${INPUT} ] && INPUT=Y
         case $INPUT in
         [Yy] | [Yy][Ee][Ss])
@@ -648,7 +705,7 @@ function ChooseMirrors() {
         WEB_PROTOCOL="http"
     else
         CHOICE_E=$(echo -e "\n${BOLD}└─ 软件源是否使用 HTTP 协议? [Y/n] ${PLAIN}")
-        read -p "${CHOICE_E}" INPUT
+        read -r -p "${CHOICE_E}" INPUT
         [ -z ${INPUT} ] && INPUT=Y
         case $INPUT in
         [Yy] | [Yy][Ee][Ss])
