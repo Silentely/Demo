@@ -5,7 +5,811 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Center - Enrollment</title>
-    <link rel="stylesheet" href="styles-blue.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(to bottom, #4a90e2, #357abd);
+            color: white;
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 50px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 30px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 3px;
+        }
+
+        .default-logo {
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .logo-text {
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .university-name {
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .header-right {
+            display: flex;
+            gap: 5px;
+        }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 悬浮按钮容器 */
+        .floating-buttons-container {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 1000;
+        }
+
+        /* 悬浮导出按钮 */
+        .floating-export-btn {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            white-space: nowrap;
+        }
+
+        .floating-export-btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(135deg, #5CBF60, #4CAF50);
+        }
+
+        .floating-export-btn:active {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .floating-export-btn.loading {
+            background: linear-gradient(135deg, #999, #777);
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .export-icon {
+            font-size: 18px;
+            animation: pulse 2s infinite;
+        }
+
+        .export-text {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* 悬浮学校信息修改按钮 */
+        .floating-school-btn {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            white-space: nowrap;
+        }
+
+        .floating-school-btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+            background: linear-gradient(135deg, #42A5F5, #2196F3);
+        }
+
+        .school-icon {
+            font-size: 18px;
+            animation: bounce 2s infinite;
+        }
+
+        .school-text {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+        }
+
+        .close {
+            font-size: 24px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .close:hover {
+            transform: scale(1.2);
+        }
+
+        .modal-body {
+            padding: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input[type="text"]:focus {
+            outline: none;
+            border-color: #2196F3;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+
+        /* Logo上传方式 */
+        .logo-upload-methods {
+            width: 100%;
+        }
+
+        .upload-tabs {
+            display: flex;
+            border-bottom: 2px solid #eee;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: #f5f5f5;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            border-radius: 8px 8px 0 0;
+            margin-right: 2px;
+        }
+
+        .tab-btn.active {
+            background: #2196F3;
+            color: white;
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: #e0e0e0;
+        }
+
+        .upload-method {
+            display: none;
+            margin-bottom: 20px;
+        }
+
+        .upload-method.active {
+            display: block;
+        }
+
+        /* 本地文件上传 */
+        .logo-upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 30px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #fafafa;
+        }
+
+        .logo-upload-area:hover {
+            border-color: #2196F3;
+            background: #f0f8ff;
+        }
+
+        .upload-placeholder p {
+            margin: 8px 0;
+            color: #666;
+        }
+
+        .upload-icon {
+            font-size: 24px;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        /* 网络链接上传 */
+        .url-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .url-input-group input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .url-load-btn {
+            padding: 12px 20px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s ease;
+        }
+
+        .url-load-btn:hover {
+            background: #1976D2;
+        }
+
+
+
+        /* Logo预览区域 */
+        .logo-preview-section {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .logo-preview {
+            margin: 15px 0;
+        }
+
+        .logo-preview-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .delete-logo-btn {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ff4444;
+            color: white;
+            border: 2px solid white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(255, 68, 68, 0.3);
+            z-index: 10;
+        }
+
+        .delete-logo-btn:hover {
+            background: #ff2222;
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(255, 68, 68, 0.5);
+        }
+
+        .delete-logo-btn:active {
+            transform: scale(0.95);
+        }
+
+        .delete-icon {
+            line-height: 1;
+            margin-top: -2px;
+        }
+
+        .logo-preview img {
+            max-width: 120px;
+            max-height: 120px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-default-logo {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #4a90e2, #357abd);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .preview-logo-text {
+            font-size: 32px;
+            font-weight: bold;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .upload-tip, .preview-tip {
+            color: #666;
+            font-size: 12px;
+            margin: 10px 0 0 0;
+        }
+
+        .preview-tip {
+            font-weight: bold;
+        }
+
+        .modal-footer {
+            padding: 20px 25px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #eee;
+        }
+
+        .btn-cancel, .btn-save {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-cancel {
+            background-color: #f5f5f5;
+            color: #666;
+        }
+
+        .btn-cancel:hover {
+            background-color: #e0e0e0;
+        }
+
+        .btn-save {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+        }
+
+        .btn-save:hover {
+            background: linear-gradient(135deg, #5CBF60, #4CAF50);
+            transform: translateY(-2px);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .floating-buttons-container {
+                bottom: 20px;
+                flex-direction: column;
+                gap: 10px;
+                align-items: center;
+            }
+            
+            .floating-export-btn, .floating-school-btn {
+                padding: 12px 20px;
+                font-size: 12px;
+                min-width: 120px;
+                justify-content: center;
+            }
+            
+            .export-icon, .school-icon {
+                font-size: 16px;
+            }
+
+            .export-text, .school-text {
+                font-size: 12px;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+
+            .modal-body {
+                padding: 20px;
+            }
+
+            .delete-logo-btn {
+                width: 20px;
+                height: 20px;
+                font-size: 14px;
+                top: -6px;
+                right: -6px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .floating-buttons-container {
+                bottom: 15px;
+                gap: 8px;
+            }
+            
+            .floating-export-btn, .floating-school-btn {
+                padding: 10px 16px;
+                font-size: 11px;
+                min-width: 100px;
+            }
+            
+            .export-text, .school-text {
+                font-size: 11px;
+            }
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 180px;
+            background-color: #e8e8e8;
+            border-right: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .nav-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .nav-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #d0d0d0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .nav-item:hover {
+            background-color: #ddd;
+        }
+
+        .nav-item.active {
+            background-color: #b8d4f0;
+            border-left: 3px solid #4a90e2;
+        }
+
+        .nav-icon {
+            font-size: 12px;
+            width: 16px;
+        }
+
+        .nav-text {
+            flex: 1;
+        }
+
+        .nav-subtext {
+            font-size: 10px;
+            color: #666;
+            margin-left: auto;
+        }
+
+        .logout-section {
+            margin-top: auto;
+            padding: 10px;
+        }
+
+        .logout-btn-sidebar {
+            background-color: #d9534f;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            width: 100%;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        /* Content Area */
+        .content {
+            flex: 1;
+            padding: 15px;
+            background-color: white;
+            overflow-y: auto;
+        }
+
+        .breadcrumb {
+            background: linear-gradient(to bottom, #4a90e2, #357abd);
+            color: white;
+            padding: 8px 15px;
+            margin: -15px -15px 15px -15px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            font-size: 11px;
+        }
+
+        .user-icon {
+            font-size: 14px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 11px;
+        }
+
+        th {
+            background-color: #333;
+            color: white;
+            padding: 8px;
+            text-align: left;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .appointments-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .enrollment-table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .limits-table {
+            background-color: #f5f5f5;
+        }
+
+        .limits-table th {
+            background-color: #666;
+        }
+
+        /* Sections */
+        section {
+            margin-bottom: 25px;
+        }
+
+        h2 {
+            font-size: 13px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        h3 {
+            font-size: 12px;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background-color: #f0ad4e;
+            color: white;
+        }
+
+        .btn-secondary {
+            background-color: #5bc0de;
+            color: white;
+        }
+
+        .btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Right Sidebar */
+        .right-sidebar {
+            width: 200px;
+            background-color: #f8f8f8;
+            border-left: 1px solid #ddd;
+            padding: 15px;
+        }
+
+        .sidebar-section {
+            margin-bottom: 20px;
+        }
+
+        .sidebar-section h4 {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .sidebar-links {
+            list-style: none;
+        }
+
+        .sidebar-links li {
+            margin-bottom: 5px;
+        }
+
+        .sidebar-links a {
+            color: #4a90e2;
+            text-decoration: none;
+            font-size: 11px;
+        }
+
+        .sidebar-links a:hover {
+            text-decoration: underline;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            .right-sidebar {
+                width: 150px;
+            }
+        }
+
+        @media (max-width: 1000px) {
+            .right-sidebar {
+                display: none;
+            }
+        }
+
+        @media (max-width: 800px) {
+            .sidebar {
+                width: 150px;
+            }
+            
+            .nav-text {
+                font-size: 10px;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -13,8 +817,10 @@
         <!-- Header -->
         <header class="header">
             <div class="header-left">
-                <img src="Northwestern_Connecticut_Community_College_Seal.png" alt="NCCC" class="logo">
-                <span class="university-name">YOUR SCHOOL NAME</span>
+                <div class="logo default-logo">
+                    <span class="logo-text">示例</span>
+                </div>
+                <span class="university-name">示例大学</span>
             </div>
             <div class="header-right">
                 <button class="icon-btn home-btn">🏠</button>
@@ -94,7 +900,7 @@
                 <!-- User Info -->
                 <div class="user-info">
                     <span class="user-icon">👤</span>
-                    <span class="username">Your Name</span>
+                    <span class="username">学生姓名</span>
                 </div>
 
                 <!-- Enrollment Appointments Section -->
@@ -226,6 +1032,400 @@
             </aside>
         </div>
     </div>
+
+    <!-- 悬浮按钮容器 -->
+    <div class="floating-buttons-container">
+        <!-- 悬浮导出按钮 -->
+        <div class="floating-export-btn" onclick="exportAsImage()" title="导出为图片">
+            <span class="export-icon">📷</span>
+            <span class="export-text">导出图片</span>
+        </div>
+
+        <!-- 悬浮学校信息修改按钮 -->
+        <div class="floating-school-btn" onclick="openSchoolInfoModal()" title="修改学校信息">
+            <span class="school-icon">🏫</span>
+            <span class="school-text">学校信息修改</span>
+        </div>
+    </div>
+
+    <!-- 学校信息修改模态框 -->
+    <div id="schoolInfoModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>学校信息修改</h3>
+                <span class="close" onclick="closeSchoolInfoModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="schoolName">学校名称:</label>
+                    <input type="text" id="schoolName" placeholder="请输入学校名称" value="示例大学" oninput="autoSaveSchoolName()" onblur="autoSaveSchoolName()">
+                </div>
+                <div class="form-group">
+                    <label for="schoolLogo">学校Logo:</label>
+                    <div class="logo-upload-methods">
+                        <!-- 方法选择标签 -->
+                        <div class="upload-tabs">
+                            <button type="button" class="tab-btn active" onclick="switchUploadMethod('file')">📁 本地上传</button>
+                            <button type="button" class="tab-btn" onclick="switchUploadMethod('url')">🔗 网络链接</button>
+                        </div>
+                        
+                        <!-- 本地文件上传 -->
+                        <div id="upload-file" class="upload-method active">
+                            <div class="logo-upload-area" onclick="document.getElementById('schoolLogo').click()">
+                                <input type="file" id="schoolLogo" accept="image/*" onchange="previewLogo(event)" style="display: none;">
+                                <div class="upload-placeholder">
+                                    <span class="upload-icon">📤</span>
+                                    <p>点击选择文件或拖拽到此处</p>
+                                    <p class="upload-tip">支持 JPG、PNG、SVG 格式，建议尺寸 200x200px</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 网络链接 -->
+                        <div id="upload-url" class="upload-method">
+                            <div class="url-input-group">
+                                <input type="url" id="logoUrl" placeholder="请输入图片链接 (https://...)" onblur="autoLoadLogoFromUrl()">
+                                <button type="button" onclick="loadLogoFromUrl()" class="url-load-btn">加载</button>
+                            </div>
+                            <p class="upload-tip">支持 JPG、PNG、SVG 格式的网络图片链接</p>
+                        </div>
+                        
+
+                        
+                        <!-- Logo预览 -->
+                        <div class="logo-preview-section">
+                            <div class="logo-preview">
+                                <div class="logo-preview-container">
+                                    <div id="logoPreview" class="preview-default-logo">
+                                        <span class="preview-logo-text">示例</span>
+                                    </div>
+                                    <button type="button" class="delete-logo-btn" id="deleteLogoBtn" onclick="deleteLogo()" title="删除Logo" style="display: none;">
+                                        <span class="delete-icon">×</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="preview-tip">预览效果</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeSchoolInfoModal()">取消</button>
+                <button class="btn-save" onclick="saveSchoolInfo()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- html2canvas库 - 用于将HTML转换为图片 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    
+    <script>
+        function exportAsImage() {
+            // 显示加载提示
+            const exportBtn = document.querySelector('.floating-export-btn');
+            const exportIcon = exportBtn.querySelector('.export-icon');
+            const exportText = exportBtn.querySelector('.export-text');
+            const buttonsContainer = document.querySelector('.floating-buttons-container');
+            const modal = document.getElementById('schoolInfoModal');
+            
+            exportBtn.classList.add('loading');
+            exportIcon.innerHTML = '⏳';
+            exportText.innerHTML = '正在导出...';
+
+            // 隐藏悬浮按钮和模态框
+            buttonsContainer.style.display = 'none';
+            modal.style.display = 'none';
+
+            // 使用html2canvas截取整个页面
+            html2canvas(document.body, {
+                useCORS: true,
+                allowTaint: true,
+                scale: 2, // 提高图片质量
+                backgroundColor: '#f5f5f5',
+                height: window.innerHeight,
+                width: window.innerWidth,
+                scrollX: 0,
+                scrollY: 0
+            }).then(function(canvas) {
+                // 创建下载链接
+                const link = document.createElement('a');
+                link.download = '入学信息_' + new Date().toLocaleDateString('zh-CN').replace(/\//g, '-') + '.png';
+                link.href = canvas.toDataURL('image/png');
+                
+                // 自动下载
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // 恢复按钮状态和显示
+                exportBtn.classList.remove('loading');
+                exportIcon.innerHTML = '📷';
+                exportText.innerHTML = '导出图片';
+                buttonsContainer.style.display = 'flex';
+                
+                // 显示成功提示
+                alert('图片导出成功！');
+            }).catch(function(error) {
+                console.error('导出失败:', error);
+                alert('导出失败，请重试！');
+                
+                // 恢复按钮状态和显示
+                exportBtn.classList.remove('loading');
+                exportIcon.innerHTML = '📷';
+                exportText.innerHTML = '导出图片';
+                buttonsContainer.style.display = 'flex';
+            });
+        }
+
+        // 自动保存相关变量
+        let autoSaveTimeout = null;
+
+        // 自动保存学校名称
+        function autoSaveSchoolName() {
+            const schoolName = document.getElementById('schoolName').value.trim();
+            
+            if (!schoolName) {
+                return;
+            }
+            
+            // 延迟保存，避免频繁操作
+            clearTimeout(autoSaveTimeout);
+            autoSaveTimeout = setTimeout(() => {
+                // 更新页面显示
+                document.querySelector('.university-name').textContent = schoolName;
+                
+                // 保存到本地存储
+                localStorage.setItem('schoolName', schoolName);
+            }, 800); // 800ms延迟
+        }
+
+        // 自动加载网络图片
+        function autoLoadLogoFromUrl() {
+            const url = document.getElementById('logoUrl').value.trim();
+            
+            if (!url) {
+                return; // 空值不处理
+            }
+            
+            if (!url.startsWith('https://') && !url.startsWith('http://')) {
+                return;
+            }
+            
+            const testImg = new Image();
+            testImg.onload = function() {
+                updateLogoDisplay(url);
+                
+                // 自动保存到本地存储
+                localStorage.setItem('schoolLogo', url);
+            };
+            testImg.src = url;
+        }
+
+        // 学校信息修改功能
+        function openSchoolInfoModal() {
+            document.getElementById('schoolInfoModal').style.display = 'block';
+            // 加载当前学校信息
+            const currentSchoolName = document.querySelector('.university-name').textContent;
+            document.getElementById('schoolName').value = currentSchoolName;
+        }
+
+        function closeSchoolInfoModal() {
+            document.getElementById('schoolInfoModal').style.display = 'none';
+        }
+
+        // 切换上传方式
+        function switchUploadMethod(method) {
+            // 移除所有活动状态
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.upload-method').forEach(method => method.classList.remove('active'));
+            
+            // 激活选中的方式
+            event.target.classList.add('active');
+            document.getElementById('upload-' + method).classList.add('active');
+        }
+
+        // 显示/隐藏删除按钮
+        function toggleDeleteButton(show) {
+            const deleteBtn = document.getElementById('deleteLogoBtn');
+            deleteBtn.style.display = show ? 'flex' : 'none';
+        }
+
+        // 更新logo显示
+        function updateLogoDisplay(imageSrc) {
+            // 更新预览
+            const logoPreview = document.getElementById('logoPreview');
+            logoPreview.innerHTML = `<img src="${imageSrc}" alt="Logo预览" style="max-width: 120px; max-height: 120px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">`;
+            logoPreview.className = '';
+            
+            // 更新页面头部logo
+            const headerLogo = document.querySelector('.logo');
+            headerLogo.innerHTML = `<img src="${imageSrc}" alt="学校Logo">`;
+            headerLogo.className = 'logo';
+            
+            // 显示删除按钮
+            toggleDeleteButton(true);
+        }
+
+        // 恢复默认logo
+        function restoreDefaultLogo() {
+            // 恢复预览默认样式
+            const logoPreview = document.getElementById('logoPreview');
+            logoPreview.innerHTML = `<span class="preview-logo-text">示例</span>`;
+            logoPreview.className = 'preview-default-logo';
+            
+            // 恢复页面头部默认logo
+            const headerLogo = document.querySelector('.logo');
+            headerLogo.innerHTML = `<span class="logo-text">示例</span>`;
+            headerLogo.className = 'logo default-logo';
+            
+            // 隐藏删除按钮
+            toggleDeleteButton(false);
+        }
+
+        // 删除Logo功能
+        function deleteLogo() {
+            if (confirm('确定要删除当前Logo并恢复到默认状态吗？')) {
+                // 清除本地存储中的Logo
+                localStorage.removeItem('schoolLogo');
+                
+                // 恢复默认Logo
+                restoreDefaultLogo();
+                
+                // 清空上传输入框
+                const fileInput = document.getElementById('schoolLogo');
+                if (fileInput) fileInput.value = '';
+                
+                const urlInput = document.getElementById('logoUrl');
+                if (urlInput) urlInput.value = '';
+            }
+        }
+
+        // 本地文件预览
+        function previewLogo(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const dataURL = e.target.result;
+                    updateLogoDisplay(dataURL);
+                    
+                    // 自动保存到本地存储
+                    localStorage.setItem('schoolLogo', dataURL);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 从网络链接加载Logo
+        function loadLogoFromUrl() {
+            const url = document.getElementById('logoUrl').value.trim();
+            if (!url) {
+                alert('请输入图片链接！');
+                return;
+            }
+            
+            if (!url.startsWith('https://') && !url.startsWith('http://')) {
+                alert('请输入有效的图片链接（以http://或https://开头）！');
+                return;
+            }
+            
+            // 创建一个新的图片元素来测试链接是否有效
+            const testImg = new Image();
+            testImg.onload = function() {
+                updateLogoDisplay(url);
+                localStorage.setItem('schoolLogo', url);
+                alert('图片加载成功！');
+            };
+            testImg.onerror = function() {
+                alert('图片加载失败，请检查链接是否正确！');
+            };
+            testImg.src = url;
+        }
+
+
+
+        function saveSchoolInfo() {
+            const schoolName = document.getElementById('schoolName').value.trim();
+            
+            if (!schoolName) {
+                alert('请输入学校名称！');
+                return;
+            }
+
+            // 手动触发一次保存（以防用户没有触发自动保存）
+            autoSaveSchoolName();
+            
+            closeSchoolInfoModal();
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('页面加载完成，导出功能已就绪');
+            
+            // 从本地存储加载学校信息
+            const savedSchoolName = localStorage.getItem('schoolName');
+            const savedSchoolLogo = localStorage.getItem('schoolLogo');
+            
+            if (savedSchoolName) {
+                document.querySelector('.university-name').textContent = savedSchoolName;
+            }
+            
+            if (savedSchoolLogo) {
+                updateLogoDisplay(savedSchoolLogo);
+            } else {
+                // 确保默认状态下隐藏删除按钮
+                toggleDeleteButton(false);
+            }
+            
+            // 点击模态框外部关闭
+            window.onclick = function(event) {
+                const modal = document.getElementById('schoolInfoModal');
+                if (event.target === modal) {
+                    closeSchoolInfoModal();
+                }
+            }
+
+            // 添加拖拽上传功能
+            const uploadArea = document.querySelector('.logo-upload-area');
+            if (uploadArea) {
+                uploadArea.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#2196F3';
+                    this.style.background = '#f0f8ff';
+                });
+
+                uploadArea.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#ddd';
+                    this.style.background = '#fafafa';
+                });
+
+                uploadArea.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#ddd';
+                    this.style.background = '#fafafa';
+                    
+                    const files = e.dataTransfer.files;
+                    if (files.length > 0) {
+                        const file = files[0];
+                        if (file.type.startsWith('image/')) {
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                const dataURL = e.target.result;
+                                updateLogoDisplay(dataURL);
+                                
+                                // 自动保存到本地存储
+                                localStorage.setItem('schoolLogo', dataURL);
+                            };
+                            reader.readAsDataURL(file);
+                        } else {
+                            alert('请选择图片文件！');
+                        }
+                    }
+                });
+            }
+        });
+    </script>
 </body>
 
 </html>
