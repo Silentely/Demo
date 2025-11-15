@@ -333,10 +333,11 @@ deduplicate_servers() {
     local filtered="$TMP_DIR/nat64_servers.filtered"
     log_debug "去重前记录数: $(wc -l < "$SERVERS_FILE")"
     awk -F'|' 'NF>=5 && !seen[$3]++ {
-        if (seen[$3] == 1) print "[DEBUG] 保留: " $3 > "/dev/stderr"
-    }' "$SERVERS_FILE" > "$filtered" 2>&1 | while read -r line; do
-        $DEBUG && echo "$line" >&2
-    done
+        print
+    }' "$SERVERS_FILE" > "$filtered"
+    if $DEBUG; then
+        awk -F'|' '{print "[DEBUG] 保留: " $3}' "$filtered" >&2
+    fi
     mv "$filtered" "$SERVERS_FILE"
     log_debug "去重后记录数: $(wc -l < "$SERVERS_FILE")"
 }
@@ -356,7 +357,7 @@ select_sources() {
         log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     } >&2
     local choice
-    read -rp "$(printf '\033[36;01m请选择 [1-6] (默认: 1): \033[0m')" choice </dev/tty
+    read -rp "$(printf '\033[36;01m请选择 [1-6] (默认: 1): \033[0m')" choice </dev/tty 2>/dev/null || choice=""
     choice=${choice:-1}
     echo "$choice"
 }
@@ -403,9 +404,11 @@ probe_icmp_ping() {
     os=$(uname -s)
     [[ ${#cmd[@]} -eq 0 ]] && cmd=(ping)
     if [[ "$os" == "Darwin" ]]; then
-        timeout_flag=(-W "$((PING_TIMEOUT * 1000))")
+        # macOS ping6 不支持 -W，使用 -t 设置超时（秒）
+        timeout_flag=(-t "$PING_TIMEOUT")
         [[ ${cmd[0]} == "ping6" ]] || cmd=(ping6)
     else
+        # Linux ping 使用 -w 设置整体超时（秒）
         timeout_flag=(-w "$PING_TIMEOUT")
     fi
     local output
