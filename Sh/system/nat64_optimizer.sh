@@ -185,7 +185,7 @@ fetch_nat64_xyz() {
             }
         }')
     log_info "nat64.xyz 添加 ${added} 条候选"
-    [[ $added -gt 0 ]]
+    return 0
 }
 
 fetch_nat64_net() {
@@ -246,11 +246,20 @@ fetch_static_public_list() {
     append_entry "Trex" "Tampere" "2001:67c:2b0::6" "2001:67c:2b0:db32:0:1::/96" "static"
     append_entry "level66" "Germany" "2001:67c:2960::64" "2001:67c:2960:6464::/96" "static"
     append_entry "level66" "Germany" "2001:67c:2960::6464" "2001:67c:2960:6464::/96" "static"
+    append_entry "level66" "Germany" "2001:67c:2960:5353:5353:5353:5353:5353" "2a09:11c0:f1:be00::/96" "static"
+    append_entry "level66" "Germany" "2001:67c:2960:6464:6464:6464:6464:6464" "2a09:11c0:f1:be00::/96" "static"
+    append_entry "Christian Dresel" "Germany" "2a0b:f4c0:4d:53::1" "2a0b:f4c0:4d:1::/96" "static"
+    append_entry "Christian Dresel" "Germany" "2a01:4f8:221:2d08::213" "2a01:4f8:221:2d08:64:0::/96" "static"
+    append_entry "go6Labs" "Slovenia" "2001:67c:27e4:15::6411" "2001:67c:27e4:642::/96" "static"
+    append_entry "go6Labs" "Slovenia" "2001:67c:27e4::64" "2001:67c:27e4:64::/96" "static"
+    append_entry "go6Labs" "Slovenia" "2001:67c:27e4:15::64" "2001:67c:27e4:1064::/96" "static"
+    append_entry "go6Labs" "Slovenia" "2001:67c:27e4::60" "2001:67c:27e4:11::/96" "static"
+    append_entry "Tuxis" "Netherlands" "2a03:7900:2:0:31:3:104:161" "2a03:7900:6446::/96" "static"
     append_entry "Cloudflare" "Global" "2606:4700:4700::6400" "" "static"
     append_entry "Cloudflare" "Global" "2606:4700:4700::64" "" "static"
     append_entry "Google" "Global" "2001:4860:4860::64" "" "static"
     append_entry "Google" "Global" "2001:4860:4860::6464" "" "static"
-    added=14
+    added=23
     log_info "静态列表添加 ${added} 条候选"
     return 0
 }
