@@ -18,6 +18,7 @@ CURL_MAX_TIME=${CURL_MAX_TIME:-15}
 TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t nat64)"
 SERVERS_FILE="$TMP_DIR/nat64_servers.list"
 PING_BIN=()
+SOURCE_SUCCESS_COUNT=0
 
 cleanup() {
     rm -rf "$TMP_DIR"
@@ -184,6 +185,10 @@ fetch_nat64_xyz() {
                 }
             }
         }')
+    if ((added == 0)); then
+        log_warn "nat64.xyz 未解析到任何候选"
+        return 1
+    fi
     log_info "nat64.xyz 添加 ${added} 条候选"
     return 0
 }
@@ -229,37 +234,74 @@ fetch_nat64_net() {
         }
     }')
     log_debug "nat64.net 共解析 ${added} 条"
+    if ((added == 0)); then
+        log_warn "nat64.net 未解析到任何候选"
+        return 1
+    fi
     log_info "nat64.net 添加 ${added} 条候选"
     return 0
+}
+
+run_source() {
+    local fetch_fn="$1"
+    local label="$2"
+
+    if [[ -z "$fetch_fn" || -z "$label" ]]; then
+        log_warn "run_source 参数不足"
+        return 1
+    fi
+
+    if ! declare -F "$fetch_fn" >/dev/null; then
+        log_warn "run_source: 未知数据源函数 $fetch_fn"
+        return 1
+    fi
+
+    if "$fetch_fn"; then
+        ((++SOURCE_SUCCESS_COUNT))
+        log_debug "$label 数据源加载成功"
+        return 0
+    fi
+
+    log_warn "$label 数据源不可用"
+    return 1
 }
 
 fetch_static_public_list() {
     local added=0
     log_info "添加公开 DNS64 列表..."
-    append_entry "nat64.net" "Amsterdam" "2a00:1098:2b::1" "2a00:1098:2b::/96" "static"
-    append_entry "nat64.net" "Ashburn" "2a01:4ff:f0:9876::1" "2a01:4f9:c010:3f02:64::/96" "static"
-    append_entry "nat64.net" "Helsinki" "2a01:4f9:c010:3f02::1" "2a01:4f9:c010:3f02:64::/96" "static"
-    append_entry "nat64.net" "London" "2a00:1098:2c::1" "2a00:1098:2c::/96" "static"
-    append_entry "nat64.net" "Nuremberg" "2a01:4f8:c2c:123f::1" "2a01:4f8:c2c:123f:64::/96" "static"
-    append_entry "IPng" "Amsterdam" "2a02:898::146:1" "" "static"
-    append_entry "Trex" "Tampere" "2001:67c:2b0::4" "2001:67c:2b0:db32:0:1::/96" "static"
-    append_entry "Trex" "Tampere" "2001:67c:2b0::6" "2001:67c:2b0:db32:0:1::/96" "static"
-    append_entry "level66" "Germany" "2001:67c:2960::64" "2001:67c:2960:6464::/96" "static"
-    append_entry "level66" "Germany" "2001:67c:2960::6464" "2001:67c:2960:6464::/96" "static"
-    append_entry "level66" "Germany" "2001:67c:2960:5353:5353:5353:5353:5353" "2a09:11c0:f1:be00::/96" "static"
-    append_entry "level66" "Germany" "2001:67c:2960:6464:6464:6464:6464:6464" "2a09:11c0:f1:be00::/96" "static"
-    append_entry "Christian Dresel" "Germany" "2a0b:f4c0:4d:53::1" "2a0b:f4c0:4d:1::/96" "static"
-    append_entry "Christian Dresel" "Germany" "2a01:4f8:221:2d08::213" "2a01:4f8:221:2d08:64:0::/96" "static"
-    append_entry "go6Labs" "Slovenia" "2001:67c:27e4:15::6411" "2001:67c:27e4:642::/96" "static"
-    append_entry "go6Labs" "Slovenia" "2001:67c:27e4::64" "2001:67c:27e4:64::/96" "static"
-    append_entry "go6Labs" "Slovenia" "2001:67c:27e4:15::64" "2001:67c:27e4:1064::/96" "static"
-    append_entry "go6Labs" "Slovenia" "2001:67c:27e4::60" "2001:67c:27e4:11::/96" "static"
-    append_entry "Tuxis" "Netherlands" "2a03:7900:2:0:31:3:104:161" "2a03:7900:6446::/96" "static"
-    append_entry "Cloudflare" "Global" "2606:4700:4700::6400" "" "static"
-    append_entry "Cloudflare" "Global" "2606:4700:4700::64" "" "static"
-    append_entry "Google" "Global" "2001:4860:4860::64" "" "static"
-    append_entry "Google" "Global" "2001:4860:4860::6464" "" "static"
-    added=23
+    while IFS='|' read -r provider location dns64 prefix; do
+        [[ -z "$dns64" ]] && continue
+        append_entry "$provider" "$location" "$dns64" "$prefix" "static"
+        ((added++))
+    done <<'EOF'
+nat64.net|Amsterdam|2a00:1098:2b::1|2a00:1098:2b::/96
+nat64.net|Ashburn|2a01:4ff:f0:9876::1|2a01:4f9:c010:3f02:64::/96
+nat64.net|Helsinki|2a01:4f9:c010:3f02::1|2a01:4f9:c010:3f02:64::/96
+nat64.net|London|2a00:1098:2c::1|2a00:1098:2c::/96
+nat64.net|Nuremberg|2a01:4f8:c2c:123f::1|2a01:4f8:c2c:123f:64::/96
+IPng|Amsterdam|2a02:898::146:1|
+Trex|Tampere|2001:67c:2b0::4|2001:67c:2b0:db32:0:1::/96
+Trex|Tampere|2001:67c:2b0::6|2001:67c:2b0:db32:0:1::/96
+level66|Germany|2001:67c:2960::64|2001:67c:2960:6464::/96
+level66|Germany|2001:67c:2960::6464|2001:67c:2960:6464::/96
+level66|Germany|2001:67c:2960:5353:5353:5353:5353:5353|2a09:11c0:f1:be00::/96
+level66|Germany|2001:67c:2960:6464:6464:6464:6464:6464|2a09:11c0:f1:be00::/96
+Christian Dresel|Germany|2a0b:f4c0:4d:53::1|2a0b:f4c0:4d:1::/96
+Christian Dresel|Germany|2a01:4f8:221:2d08::213|2a01:4f8:221:2d08:64:0::/96
+go6Labs|Slovenia|2001:67c:27e4:15::6411|2001:67c:27e4:642::/96
+go6Labs|Slovenia|2001:67c:27e4::64|2001:67c:27e4:64::/96
+go6Labs|Slovenia|2001:67c:27e4:15::64|2001:67c:27e4:1064::/96
+go6Labs|Slovenia|2001:67c:27e4::60|2001:67c:27e4:11::/96
+Tuxis|Netherlands|2a03:7900:2:0:31:3:104:161|2a03:7900:6446::/96
+Cloudflare|Global|2606:4700:4700::6400|
+Cloudflare|Global|2606:4700:4700::64|
+Google|Global|2001:4860:4860::64|
+Google|Global|2001:4860:4860::6464|
+EOF
+    if ((added == 0)); then
+        log_warn "静态列表未添加任何候选"
+        return 1
+    fi
     log_info "静态列表添加 ${added} 条候选"
     return 0
 }
@@ -313,24 +355,24 @@ collect_servers() {
     : > "$SERVERS_FILE"
     local choice
     choice=$(select_sources)
-    local success=0
+    SOURCE_SUCCESS_COUNT=0
 
     case "$choice" in
         1)
-            fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用"
-            fetch_nat64_xyz && ((success++)) || log_warn "nat64.xyz 数据源不可用"
-            fetch_static_public_list && ((success++)) || log_warn "静态列表数据源不可用"
+            run_source fetch_nat64_net "nat64.net"
+            run_source fetch_nat64_xyz "nat64.xyz"
+            run_source fetch_static_public_list "静态列表"
             ;;
-        2) fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用" ;;
-        3) fetch_nat64_xyz && ((success++)) || log_warn "nat64.xyz 数据源不可用" ;;
-        4) fetch_static_public_list && ((success++)) || log_warn "静态列表数据源不可用" ;;
+        2) run_source fetch_nat64_net "nat64.net" ;;
+        3) run_source fetch_nat64_xyz "nat64.xyz" ;;
+        4) run_source fetch_static_public_list "静态列表" ;;
         5)
-            fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用"
-            fetch_nat64_xyz && ((success++)) || log_warn "nat64.xyz 数据源不可用"
+            run_source fetch_nat64_net "nat64.net"
+            run_source fetch_nat64_xyz "nat64.xyz"
             ;;
         6)
-            fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用"
-            fetch_static_public_list && ((success++)) || log_warn "静态列表数据源不可用"
+            run_source fetch_nat64_net "nat64.net"
+            run_source fetch_static_public_list "静态列表"
             ;;
         *) die "无效选择" ;;
     esac
@@ -343,6 +385,7 @@ collect_servers() {
     total=$(grep -c '.' "$SERVERS_FILE" 2>/dev/null || echo 0)
     ((total > 0)) || die "没有可用的候选服务器"
     log_info "共收集 ${total} 台候选 DNS64"
+    log_info "成功加载 ${SOURCE_SUCCESS_COUNT} 个数据源"
 }
 
 ping_latency() {
