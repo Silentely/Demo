@@ -20,6 +20,7 @@ SERVERS_FILE="$TMP_DIR/nat64_servers.list"
 PING_BIN=()
 SOURCE_SUCCESS_COUNT=0
 LATENCY_PROBES=()
+RESOLV_CONF=${RESOLV_CONF:-/etc/resolv.conf}
 
 cleanup() {
     rm -rf "$TMP_DIR"
@@ -123,6 +124,121 @@ init_latency_probes() {
     { command -v dig >/dev/null 2>&1 || command -v drill >/dev/null 2>&1; } && LATENCY_PROBES+=("dns_query")
     [[ ${#LATENCY_PROBES[@]} -gt 0 ]] || LATENCY_PROBES=("icmp_ping")
     log_debug "可用延迟探测方法: ${LATENCY_PROBES[*]}"
+}
+
+is_ipv6_address() {
+    [[ "$1" == *:* ]]
+}
+
+format_status_table() {
+    local rows="$1"
+    printf '┌─────────────────────────────────────────────────────────┐\n'
+    printf '│                     当前NAT64状态                        │\n'
+    printf '├─────────────────────┬─────────────────────┬─────────────┤\n'
+    printf '│ DNS服务器           │ 状态               │ 延迟        │\n'
+    printf '├─────────────────────┼─────────────────────┼─────────────┤\n'
+    if [[ -z "$rows" ]]; then
+        printf '│ %-19s │ %-19s │ %-9s │\n' "未配置" "N/A" "N/A"
+    else
+        while IFS='|' read -r dns status latency; do
+            [[ -z "$dns" ]] && continue
+            printf '│ %-19s │ %-19s │ %-9s │\n' "$dns" "$status" "$latency"
+        done <<< "$rows"
+    fi
+    printf '└─────────────────────┴─────────────────────┴─────────────┘\n'
+}
+
+check_ipv6_connectivity() {
+    local target="${1:-2001:4860:4860::64}"
+    if ping_latency "$target" >/dev/null 2>&1; then
+        printf '\033[32m✓\033[0m 正常'
+        return 0
+    fi
+    printf '\033[31m✗\033[0m 受限'
+    return 1
+}
+
+detect_nat64_prefix() {
+    local resolver="$1" answer tool=()
+    [[ -z "$resolver" ]] && return 1
+    if command -v dig >/dev/null 2>&1; then
+        tool=(dig +tries=1 +time=2 +short @"$resolver" ipv4only.arpa AAAA)
+    elif command -v drill >/dev/null 2>&1; then
+        tool=(drill -T 2 @"$resolver" ipv4only.arpa AAAA)
+    else
+        return 1
+    fi
+    answer=$("${tool[@]}" 2>/dev/null | head -n1 | tr -d '\r')
+    [[ "$answer" == *:* ]] || return 1
+    command -v python3 >/dev/null 2>&1 || return 1
+    python3 - "$answer" <<'PY' 2>/dev/null || return 1
+import sys, ipaddress
+try:
+    addr = ipaddress.IPv6Address(sys.argv[1])
+    mask = (1 << 128) - (1 << 32)
+    net = ipaddress.IPv6Network((int(addr) & mask, 96))
+    print(str(net))
+except:
+    sys.exit(1)
+PY
+}
+
+check_current_nat64() {
+    local -a nameservers=()
+    local table_rows="" first_ipv6=""
+
+    # 读取nameserver
+    mapfile -t nameservers < <(awk '/^nameserver/ {print $2}' "$RESOLV_CONF" 2>/dev/null | awk 'NF' | uniq)
+
+    if ((${#nameservers[@]} == 0)); then
+        table_rows="未配置|\033[33m✗ 未设置\033[0m|N/A"$'\n'
+    else
+        local ns latency status
+        for ns in "${nameservers[@]}"; do
+            [[ -z "$ns" ]] && continue
+            if is_ipv6_address "$ns"; then
+                [[ -z "$first_ipv6" ]] && first_ipv6="$ns"
+                if latency=$(ping_latency "$ns" 2>/dev/null); then
+                    status='\033[32m✓ 可达\033[0m'
+                    latency="${latency}ms"
+                else
+                    status='\033[31m✗ 不可达\033[0m'
+                    latency="N/A"
+                fi
+            else
+                status='\033[33m✗ 非IPv6\033[0m'
+                latency="N/A"
+            fi
+            table_rows+="${ns}|${status}|${latency}"$'\n'
+        done
+    fi
+
+    # 显示表格
+    printf '\n'
+    format_status_table "$table_rows"
+
+    # IPv6连接状态
+    local ipv6_status ipv6_ok=true
+    if ipv6_status=$(check_ipv6_connectivity); then
+        :
+    else
+        ipv6_ok=false
+    fi
+    printf "IPv6连接状态: %s\n" "$ipv6_status"
+
+    # NAT64前缀检测
+    local prefix_note="未检测" prefix_display="未知"
+    if [[ -n "$first_ipv6" ]] && prefix_display=$(detect_nat64_prefix "$first_ipv6"); then
+        prefix_note="已检测"
+    elif [[ -z "$first_ipv6" ]]; then
+        prefix_note="未发现 IPv6 DNS"
+    fi
+    printf "NAT64前缀: %s (%s)\n\n" "$prefix_display" "$prefix_note"
+
+    # 排障建议
+    [[ -z "$first_ipv6" ]] && log_warn "resolv.conf 中未发现 IPv6 DNS，可能无法直接进行 NAT64 检测"
+    $ipv6_ok || log_warn "IPv6 连接异常，可检查网络或使用 -d 查看更详细日志"
+    [[ "$prefix_note" == "未检测" ]] && log_warn "无法自动解析 ipv4only.arpa，若需要可手动指定 DNS64。"
 }
 
 append_entry() {
@@ -566,6 +682,7 @@ main() {
     require_cmds curl awk
     select_ping_bin
     init_latency_probes
+    check_current_nat64
     collect_servers
 
     local results
