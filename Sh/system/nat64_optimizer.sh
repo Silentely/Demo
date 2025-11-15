@@ -12,6 +12,7 @@ SCRIPT_VERSION="2025.11.15"
 PING_COUNT=4
 PING_TIMEOUT=5
 AUTO_APPLY=false
+DEBUG=false
 CURL_MAX_TIME=${CURL_MAX_TIME:-15}
 
 TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t nat64)"
@@ -32,6 +33,7 @@ log_color() {
 log_info() { printf "\033[32;01m[INFO] %s\033[0m\n" "$*" >&2; }
 log_warn() { printf "\033[33;01m[WARN] %s\033[0m\n" "$*" >&2; }
 log_error() { printf "\033[31;01m[ERROR] %s\033[0m\n" "$*" >&2; }
+log_debug() { $DEBUG && printf "\033[35;01m[DEBUG] %s\033[0m\n" "$*" >&2; }
 
 die() {
     log_error "$*"
@@ -46,6 +48,7 @@ usage() {
   -a, --auto-apply       自动应用最佳 DNS64，无需交互
   -c, --count <N>        每台服务器发送的 ping 次数 (默认: ${PING_COUNT})
   -t, --timeout <sec>    ping 命令整体超时秒数 (默认: ${PING_TIMEOUT})
+  -d, --debug            启用调试模式，显示详细错误信息
   -h, --help             查看本帮助
 
 环境变量:
@@ -79,6 +82,7 @@ parse_args() {
     while (($#)); do
         case "$1" in
             -a|--auto-apply) AUTO_APPLY=true ;;
+            -d|--debug) DEBUG=true ;;
             -c|--count)
                 [[ -n ${2:-} ]] || die "--count 需要参数"
                 [[ $2 =~ ^[0-9]+$ ]] || die "--count 仅接受数字"
@@ -124,14 +128,32 @@ append_entry() {
 
 fetch_with_timeout() {
     local url="$1"
-    curl -fsSL --max-time "$CURL_MAX_TIME" "$url"
+    local output error_msg
+    if $DEBUG; then
+        output=$(curl -fsSL --max-time "$CURL_MAX_TIME" "$url" 2>&1)
+        local ret=$?
+        if [[ $ret -ne 0 ]]; then
+            log_debug "curl 失败 (退出码: $ret): $url"
+            log_debug "错误信息: $output"
+            return $ret
+        fi
+        echo "$output"
+    else
+        curl -fsSL --max-time "$CURL_MAX_TIME" "$url"
+    fi
 }
 
 fetch_nat64_xyz() {
     local url="https://raw.githubusercontent.com/level66network/nat64.xyz/refs/heads/main/content/_index.md"
     log_info "抓取 nat64.xyz 列表..."
+    log_debug "请求 URL: $url"
     local tmp_output
-    tmp_output=$(fetch_with_timeout "$url" 2>&1) || { log_warn "nat64.xyz 拉取失败"; return 1; }
+    tmp_output=$(fetch_with_timeout "$url" 2>&1) || {
+        log_warn "nat64.xyz 拉取失败"
+        log_debug "返回内容: $tmp_output"
+        return 1
+    }
+    log_debug "成功获取 nat64.xyz 数据，长度: ${#tmp_output} 字节"
     local added=0
     while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
@@ -169,8 +191,14 @@ fetch_nat64_xyz() {
 fetch_nat64_net() {
     local url="https://nat64.net/public-providers"
     log_info "抓取 nat64.net 列表..."
+    log_debug "请求 URL: $url"
     local tmp_output
-    tmp_output=$(fetch_with_timeout "$url" 2>&1) || { log_warn "nat64.net 拉取失败"; return 1; }
+    tmp_output=$(fetch_with_timeout "$url" 2>&1) || {
+        log_warn "nat64.net 拉取失败"
+        log_debug "返回内容: $tmp_output"
+        return 1
+    }
+    log_debug "成功获取 nat64.net 数据，长度: ${#tmp_output} 字节"
     local added=0
     while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
@@ -460,10 +488,10 @@ main() {
     log_color "32;01" "  ✓ 最佳 NAT64 服务器"
     log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     printf "\033[33m  主DNS:\033[0m \033[32m${provider1}\033[0m (${location1:-未知})\n"
-    printf "         \033[36m${dns64_1}\033[0m - \033[33m${latency1} ms\033[0m\n"
+    printf "         \033[36m${dns64_1}\033[0m - \033[35m${latency1} ms\033[0m\n"
     if [[ -n "$dns64_2" ]]; then
         printf "\033[33m  备DNS:\033[0m \033[32m${provider2}\033[0m (${location2:-未知})\n"
-        printf "         \033[36m${dns64_2}\033[0m - \033[33m${latency2} ms\033[0m\n"
+        printf "         \033[36m${dns64_2}\033[0m - \033[35m${latency2} ms\033[0m\n"
     fi
     log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
