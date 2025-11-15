@@ -409,7 +409,8 @@ probe_icmp_ping() {
         timeout_flag=(-w "$PING_TIMEOUT")
     fi
     local output
-    if ! output=$("${cmd[@]}" -n -c "$PING_COUNT" "${timeout_flag[@]}" "$target" 2>/dev/null); then
+    if ! output=$("${cmd[@]}" -n -c "$PING_COUNT" "${timeout_flag[@]}" "$target" 2>&1); then
+        echo "$output" >&2
         return 1
     fi
     awk -F'[=/ ]+' '/(rtt|min\/avg|round-trip)/ {printf "%.0f\n", $(NF-2); exit}' <<< "$output"
@@ -417,7 +418,7 @@ probe_icmp_ping() {
 
 probe_tcp53() {
     local target="$1"
-    python3 - "$target" "$PING_TIMEOUT" <<'PY' 2>/dev/null || return 1
+    python3 - "$target" "$PING_TIMEOUT" <<'PY' 2>&1 || return 1
 import socket, sys, time
 try:
     dst = sys.argv[1]
@@ -428,7 +429,8 @@ try:
     sock.connect((dst, 53))
     print(int((time.time() - start) * 1000))
     sock.close()
-except:
+except Exception as e:
+    print(f"TCP53 error: {e}", file=sys.stderr)
     sys.exit(1)
 PY
 }
@@ -440,22 +442,32 @@ probe_dns_query() {
     else
         tool=(drill -T "$PING_TIMEOUT" @"$target" ipv4only.arpa AAAA)
     fi
-    output=$("${tool[@]}" 2>/dev/null) || return 1
+    output=$("${tool[@]}" 2>&1) || {
+        echo "$output" >&2
+        return 1
+    }
     latency=$(awk '/Query time:/ {print $4}' <<< "$output")
-    [[ -n "$latency" ]] || return 1
+    [[ -n "$latency" ]] || {
+        echo "DNS query: 无法解析延迟信息" >&2
+        return 1
+    }
     printf '%s\n' "$latency"
 }
 
 ping_latency() {
-    local target="$1" method value
+    local target="$1" method raw status
     for method in "${LATENCY_PROBES[@]}"; do
-        if value=$(probe_"${method}" "$target" 2>/dev/null); then
-            [[ -n "$value" ]] || continue
-            log_debug "使用 $method 探测 $target: ${value}ms"
-            printf '%s\n' "$value"
+        log_debug "尝试使用 ${method} 探测 ${target}..."
+        raw=$(probe_"${method}" "$target" 2>&1)
+        status=$?
+        if [[ $status -eq 0 && -n "$raw" ]]; then
+            log_info "✓ 使用 ${method} 探测成功: ${raw} ms"
+            printf '%s\n' "${raw%.*}"
             return 0
         fi
+        log_debug "✗ ${method} 探测失败 (exit=${status}): ${raw:-<无输出>}"
     done
+    log_warn "所有探测方法均失败: ${target}"
     return 1
 }
 
@@ -476,7 +488,8 @@ select_best_servers() {
     done < "$SERVERS_FILE"
 
     if [[ ! -s "$results_file" ]]; then
-        log_warn "所有候选的 ICMP 测试均失败，按列表顺序返回前两个候选"
+        log_warn "所有候选的延迟探测方法均失败，按列表顺序返回前两个候选"
+        log_warn "提示: 请检查网络连接、防火墙设置或使用 -d 查看详细日志"
         local count=0
         while IFS='|' read -r provider location dns64 prefix source && ((count < 2)); do
             printf '999999|%s|%s|%s|%s|%s\n' "$provider" "$location" "$dns64" "$prefix" "$source"
