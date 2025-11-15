@@ -21,6 +21,7 @@ PING_BIN=()
 SOURCE_SUCCESS_COUNT=0
 LATENCY_PROBES=()
 RESOLV_CONF=${RESOLV_CONF:-/etc/resolv.conf}
+DOWNLOAD_LAST_ERROR=""
 
 cleanup() {
     rm -rf "$TMP_DIR"
@@ -37,6 +38,90 @@ log_info() { printf "\033[32;01m[INFO] %s\033[0m\n" "$*" >&2; }
 log_warn() { printf "\033[33;01m[WARN] %s\033[0m\n" "$*" >&2; }
 log_error() { printf "\033[31;01m[ERROR] %s\033[0m\n" "$*" >&2; }
 log_debug() { $DEBUG && printf "\033[35;01m[DEBUG] %s\033[0m\n" "$*" >&2; }
+
+format_duration() {
+    local secs="${1:-0}"
+    if ((secs <= 0)); then
+        printf '<1s'
+    else
+        printf '%ss' "$secs"
+    fi
+}
+
+format_bytes() {
+    local bytes="${1:-0}"
+    awk -v b="$bytes" 'BEGIN {
+        unit[1]="B"; unit[2]="KB"; unit[3]="MB"; unit[4]="GB"; unit[5]="TB";
+        max=5;
+        value=b+0;
+        idx=1;
+        while (value >= 1024 && idx < max) {
+            value/=1024;
+            idx++;
+        }
+        if (value >= 10 || idx == 1) {
+            printf("%.0f%s", value, unit[idx]);
+        } else {
+            printf("%.1f%s", value, unit[idx]);
+        }
+    }'
+}
+
+download_source_with_status() {
+    local label="$1"
+    local url="$2"
+    local start_ts end_ts duration size size_str duration_str output
+    DOWNLOAD_LAST_ERROR=""
+    start_ts=$(date +%s)
+    if ! output=$(fetch_with_timeout "$url" 2>&1); then
+        DOWNLOAD_LAST_ERROR="$output"
+        return 1
+    fi
+    end_ts=$(date +%s)
+    duration=$((end_ts - start_ts))
+    duration_str=$(format_duration "$duration")
+    size=${#output}
+    size_str=$(format_bytes "$size")
+    log_info "完成 ${label} 下载 (${size_str}, ${duration_str})"
+    printf '%s' "$output"
+}
+
+print_speedtest_table() {
+    local entries="$1"
+    local note="${2:-}"
+    [[ -z "$entries" ]] && return
+    printf '\n'
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_color "32;01" "  NAT64 测速详情"
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf '┌────┬──────────────────┬────────────┬───────────────────────────────────────┬────────┬────────┐\n'
+    printf '│ #  │ 提供商           │ 地区       │ DNS64                                 │ 延迟ms │ 数据源 │\n'
+    printf '├────┼──────────────────┼────────────┼───────────────────────────────────────┼────────┼────────┤\n'
+    local idx=0
+    while IFS='|' read -r provider location dns prefix source latency; do
+        [[ -z "$provider" ]] && continue
+        ((idx++))
+        local latency_display
+        if [[ "$latency" =~ ^[0-9]+$ ]]; then
+            if ((latency >= 999999)); then
+                latency_display="N/A"
+            else
+                latency_display="$latency"
+            fi
+        else
+            latency_display="${latency:-N/A}"
+        fi
+        printf '│ %2d │ %-16.16s │ %-10.10s │ %-39.39s │ %-6.6s │ %-8.8s │\n' \
+            "$idx" "${provider:-未知}" "${location:-未知}" "${dns:-N/A}" "$latency_display" "${source:--}"
+        if ((idx >= 6)); then
+            break
+        fi
+    done <<< "$entries"
+    printf '└────┴──────────────────┴────────────┴───────────────────────────────────────┴────────┴────────┘\n'
+    if [[ -n "$note" ]]; then
+        printf '备注: %s\n' "$note"
+    fi
+}
 
 die() {
     log_error "$*"
@@ -283,9 +368,11 @@ fetch_nat64_xyz() {
     log_info "抓取 nat64.xyz 列表..."
     log_debug "请求 URL: $url"
     local tmp_output
-    tmp_output=$(fetch_with_timeout "$url" 2>&1) || {
+    tmp_output=$(download_source_with_status "nat64.xyz" "$url") || {
         log_warn "nat64.xyz 拉取失败"
-        log_debug "返回内容: $tmp_output"
+        if [[ -n "$DOWNLOAD_LAST_ERROR" ]]; then
+            log_debug "返回内容: $DOWNLOAD_LAST_ERROR"
+        fi
         return 1
     }
     log_debug "成功获取 nat64.xyz 数据，长度: ${#tmp_output} 字节"
@@ -332,9 +419,11 @@ fetch_nat64_net() {
     log_info "抓取 nat64.net 列表..."
     log_debug "请求 URL: $url"
     local tmp_output
-    tmp_output=$(fetch_with_timeout "$url" 2>&1) || {
+    tmp_output=$(download_source_with_status "nat64.net" "$url") || {
         log_warn "nat64.net 拉取失败"
-        log_debug "返回内容: $tmp_output"
+        if [[ -n "$DOWNLOAD_LAST_ERROR" ]]; then
+            log_debug "返回内容: $DOWNLOAD_LAST_ERROR"
+        fi
         return 1
     }
     log_debug "成功获取 nat64.net 数据，长度: ${#tmp_output} 字节"
@@ -599,30 +688,43 @@ select_best_servers() {
     local results_file="$TMP_DIR/results.list"
     : > "$results_file"
 
+    local total_candidates
+    total_candidates=$(grep -c '.' "$SERVERS_FILE" 2>/dev/null || echo 0)
+    log_info "共需测速 ${total_candidates} 台候选 DNS64"
+    local index=0
+
     while IFS='|' read -r provider location dns64 prefix source; do
         [[ -z "$dns64" ]] && continue
-        log_info "测试 ${provider} (${location:-未知}) -> ${dns64}"
+        ((index++))
+        log_info "(${index}/${total_candidates}) 测试 ${provider} (${location:-未知}) -> ${dns64}"
         local latency
         if latency=$(ping_latency "$dns64"); then
-            log_info "延迟 ${latency} ms (${source})"
-            printf '%s|%s|%s|%s|%s|%s\n' "$latency" "$provider" "$location" "$dns64" "$prefix" "$source" >> "$results_file"
+            log_info "    ↳ 延迟 ${latency} ms (${source})"
+            printf '%s|%s|%s|%s|%s|%s\n' "$provider" "$location" "$dns64" "$prefix" "$source" "$latency" >> "$results_file"
         else
-            log_warn "${dns64} 不可达"
+            log_warn "    ↳ ${dns64} 不可达"
         fi
     done < "$SERVERS_FILE"
 
-    if [[ ! -s "$results_file" ]]; then
+    local sorted_lines note=""
+    if [[ -s "$results_file" ]]; then
+        sorted_lines=$(sort -t'|' -k6 -n "$results_file")
+    else
         log_warn "所有候选的延迟探测方法均失败，按列表顺序返回前两个候选"
         log_warn "提示: 请检查网络连接、防火墙设置或使用 -d 查看详细日志"
-        local count=0
-        while IFS='|' read -r provider location dns64 prefix source && ((count < 2)); do
-            printf '999999|%s|%s|%s|%s|%s\n' "$provider" "$location" "$dns64" "$prefix" "$source"
-            ((count++))
+        note="延迟探测失败，按候选顺序展示"
+        local fallback_count=0
+        local fallback_lines=""
+        while IFS='|' read -r provider location dns64 prefix source && ((fallback_count < 6)); do
+            [[ -z "$dns64" ]] && continue
+            fallback_lines+=$(printf '%s|%s|%s|%s|%s|%s\n' "$provider" "$location" "$dns64" "$prefix" "$source" "999999")
+            ((fallback_count++))
         done < "$SERVERS_FILE"
-        return 0
+        sorted_lines="$fallback_lines"
     fi
 
-    sort -t'|' -k1 -n "$results_file" | head -2 | awk -F'|' '{print $2"|"$3"|"$4"|"$5"|"$6"|"$1}'
+    print_speedtest_table "$sorted_lines" "$note"
+    printf '%s\n' "$sorted_lines" | head -2
 }
 
 ensure_root() {
