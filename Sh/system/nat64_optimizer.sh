@@ -467,21 +467,20 @@ deduplicate_servers() {
 }
 
 select_sources() {
-    {
-        printf '\n'
-        log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        log_color "36;01" "  DNS64 数据源选择"
-        log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        printf "\033[32m  1)\033[0m 全部数据源 \033[33m(推荐)\033[0m\n"
-        printf "\033[32m  2)\033[0m 仅 nat64.net\n"
-        printf "\033[32m  3)\033[0m 仅 nat64.xyz\n"
-        printf "\033[32m  4)\033[0m 仅静态公开列表\n"
-        printf "\033[32m  5)\033[0m nat64.net + nat64.xyz\n"
-        printf "\033[32m  6)\033[0m nat64.net + 静态列表\n"
-        log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    } >&2
+    printf '\n'
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_color "36;01" "  DNS64 数据源选择"
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf "\033[32m  1)\033[0m 全部数据源 \033[33m(推荐)\033[0m\n"
+    printf "\033[32m  2)\033[0m 仅 nat64.net\n"
+    printf "\033[32m  3)\033[0m 仅 nat64.xyz\n"
+    printf "\033[32m  4)\033[0m 仅静态公开列表\n"
+    printf "\033[32m  5)\033[0m nat64.net + nat64.xyz\n"
+    printf "\033[32m  6)\033[0m nat64.net + 静态列表\n"
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
     local choice
-    read -rp "$(printf '\033[36;01m请选择 [1-6] (默认: 1): \033[0m')" choice </dev/tty 2>/dev/null || choice=""
+    read -rp $'\033[36;01m请选择 [1-6] (默认: 1): \033[0m' choice
     choice=${choice:-1}
     echo "$choice"
 }
