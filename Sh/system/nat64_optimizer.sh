@@ -13,8 +13,6 @@ PING_COUNT=4
 PING_TIMEOUT=5
 AUTO_APPLY=false
 CURL_MAX_TIME=${CURL_MAX_TIME:-15}
-SKIP_NAT64_NET=${SKIP_NAT64_NET:-false}
-SKIP_NAT64_XYZ=${SKIP_NAT64_XYZ:-false}
 
 TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t nat64)"
 SERVERS_FILE="$TMP_DIR/nat64_servers.list"
@@ -54,8 +52,6 @@ usage() {
   PING_COUNT             同 --count，优先级低于命令行
   PING_TIMEOUT           同 --timeout，优先级低于命令行
   CURL_MAX_TIME          网络请求的超时秒数 (默认: ${CURL_MAX_TIME})
-  SKIP_NAT64_NET         设为 true 跳过 nat64.net 数据源
-  SKIP_NAT64_XYZ         设为 true 跳过 nat64.xyz 数据源
 EOF
     exit 0
 }
@@ -242,6 +238,28 @@ function emit_dns(provider, location, dnsfield, prefixfield, tokens, n, token, p
     [[ $added -gt 0 ]]
 }
 
+fetch_static_public_list() {
+    local added=0
+    log_info "添加公开 DNS64 列表..."
+    append_entry "nat64.net" "Amsterdam" "2a00:1098:2b::1" "2a00:1098:2b::/96" "static"
+    append_entry "nat64.net" "Ashburn" "2a01:4ff:f0:9876::1" "2a01:4f9:c010:3f02:64::/96" "static"
+    append_entry "nat64.net" "Helsinki" "2a01:4f9:c010:3f02::1" "2a01:4f9:c010:3f02:64::/96" "static"
+    append_entry "nat64.net" "London" "2a00:1098:2c::1" "2a00:1098:2c::/96" "static"
+    append_entry "nat64.net" "Nuremberg" "2a01:4f8:c2c:123f::1" "2a01:4f8:c2c:123f:64::/96" "static"
+    append_entry "IPng" "Amsterdam" "2a02:898::146:1" "" "static"
+    append_entry "Trex" "Tampere" "2001:67c:2b0::4" "2001:67c:2b0:db32:0:1::/96" "static"
+    append_entry "Trex" "Tampere" "2001:67c:2b0::6" "2001:67c:2b0:db32:0:1::/96" "static"
+    append_entry "level66" "Germany" "2001:67c:2960::64" "2001:67c:2960:6464::/96" "static"
+    append_entry "level66" "Germany" "2001:67c:2960::6464" "2001:67c:2960:6464::/96" "static"
+    append_entry "Cloudflare" "Global" "2606:4700:4700::6400" "" "static"
+    append_entry "Cloudflare" "Global" "2606:4700:4700::64" "" "static"
+    append_entry "Google" "Global" "2001:4860:4860::64" "" "static"
+    append_entry "Google" "Global" "2001:4860:4860::6464" "" "static"
+    added=14
+    log_info "静态列表添加 ${added} 条候选"
+    return 0
+}
+
 add_static_fallback() {
     log_warn "远程源不可用，使用内置候选"
     append_entry "nat64.net" "Amsterdam" "2a00:1098:2b::1" "2a00:1098:2b::/96" "fallback"
@@ -261,27 +279,50 @@ deduplicate_servers() {
     mv "$filtered" "$SERVERS_FILE"
 }
 
+select_sources() {
+    printf '\n'
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_color "36;01" "  DNS64 数据源选择"
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf "\033[32m  1)\033[0m 全部数据源 \033[33m(推荐)\033[0m\n"
+    printf "\033[32m  2)\033[0m 仅 nat64.net\n"
+    printf "\033[32m  3)\033[0m 仅 nat64.xyz\n"
+    printf "\033[32m  4)\033[0m 仅静态公开列表\n"
+    printf "\033[32m  5)\033[0m nat64.net + nat64.xyz\n"
+    printf "\033[32m  6)\033[0m nat64.net + 静态列表\n"
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    local choice
+    read -rp "$(printf '\033[36;01m请选择 [1-6] (默认: 1): \033[0m')" choice
+    choice=${choice:-1}
+    echo "$choice"
+}
+
 collect_servers() {
     : > "$SERVERS_FILE"
+    local choice
+    choice=$(select_sources)
     local success=0
-    if [[ "${SKIP_NAT64_NET,,}" != "true" ]]; then
-        if fetch_nat64_net; then
-            ((success++))
-        else
-            log_warn "nat64.net 数据源不可用"
-        fi
-    else
-        log_warn "已按配置跳过 nat64.net 数据源"
-    fi
-    if [[ "${SKIP_NAT64_XYZ,,}" != "true" ]]; then
-        if fetch_nat64_xyz; then
-            ((success++))
-        else
-            log_warn "nat64.xyz 数据源不可用"
-        fi
-    else
-        log_warn "已按配置跳过 nat64.xyz 数据源"
-    fi
+
+    case "$choice" in
+        1)
+            fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用"
+            fetch_nat64_xyz && ((success++)) || log_warn "nat64.xyz 数据源不可用"
+            fetch_static_public_list && ((success++)) || log_warn "静态列表数据源不可用"
+            ;;
+        2) fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用" ;;
+        3) fetch_nat64_xyz && ((success++)) || log_warn "nat64.xyz 数据源不可用" ;;
+        4) fetch_static_public_list && ((success++)) || log_warn "静态列表数据源不可用" ;;
+        5)
+            fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用"
+            fetch_nat64_xyz && ((success++)) || log_warn "nat64.xyz 数据源不可用"
+            ;;
+        6)
+            fetch_nat64_net && ((success++)) || log_warn "nat64.net 数据源不可用"
+            fetch_static_public_list && ((success++)) || log_warn "静态列表数据源不可用"
+            ;;
+        *) die "无效选择" ;;
+    esac
+
     if [[ ! -s "$SERVERS_FILE" ]]; then
         add_static_fallback
     fi
@@ -304,31 +345,33 @@ ping_latency() {
     printf '%s\n' "${latency%.*}"
 }
 
-select_best_server() {
-    local best_line=""
-    local best_latency=999999
+select_best_servers() {
+    local results_file="$TMP_DIR/results.list"
+    : > "$results_file"
+
     while IFS='|' read -r provider location dns64 prefix source; do
         [[ -z "$dns64" ]] && continue
         log_info "测试 ${provider} (${location:-未知}) -> ${dns64}"
         local latency
         if latency=$(ping_latency "$dns64"); then
             log_info "延迟 ${latency} ms (${source})"
-            if ((latency < best_latency)); then
-                best_latency=$latency
-                best_line="$provider|$location|$dns64|$prefix|$source|$latency"
-            fi
+            printf '%s|%s|%s|%s|%s|%s\n' "$latency" "$provider" "$location" "$dns64" "$prefix" "$source" >> "$results_file"
         else
             log_warn "${dns64} 不可达"
         fi
     done < "$SERVERS_FILE"
-    if [[ -z "$best_line" ]]; then
-        log_warn "所有候选的 ICMP 测试均失败，按列表顺序返回第一个候选"
-        local fallback
-        fallback=$(grep -m1 '.' "$SERVERS_FILE" || true)
-        [[ -n "$fallback" ]] || return 1
-        best_line="${fallback}|未知"
+
+    if [[ ! -s "$results_file" ]]; then
+        log_warn "所有候选的 ICMP 测试均失败，按列表顺序返回前两个候选"
+        local count=0
+        while IFS='|' read -r provider location dns64 prefix source && ((count < 2)); do
+            printf '999999|%s|%s|%s|%s|%s\n' "$provider" "$location" "$dns64" "$prefix" "$source"
+            ((count++))
+        done < "$SERVERS_FILE"
+        return 0
     fi
-    printf '%s\n' "$best_line"
+
+    sort -t'|' -k1 -n "$results_file" | head -2 | awk -F'|' '{print $2"|"$3"|"$4"|"$5"|"$6"|"$1}'
 }
 
 ensure_root() {
@@ -363,16 +406,20 @@ update_systemd_resolved() {
 }
 
 apply_dns64() {
-    local dns64="$1"
+    local dns64_1="$1"
+    local dns64_2="$2"
     ensure_root
     local backup="/etc/resolv.conf.backup.$(date +%Y%m%d_%H%M%S)"
     if [[ -f /etc/resolv.conf ]]; then
         cp /etc/resolv.conf "$backup"
         log_info "已备份 resolv.conf -> $backup"
     fi
-    printf 'nameserver %s\n' "$dns64" > /etc/resolv.conf
-    update_systemd_resolved "$dns64"
-    log_info "已将系统 DNS 设置为 ${dns64}"
+    {
+        printf 'nameserver %s\n' "$dns64_1"
+        [[ -n "$dns64_2" ]] && printf 'nameserver %s\n' "$dns64_2"
+    } > /etc/resolv.conf
+    update_systemd_resolved "$dns64_1"
+    log_info "已将系统 DNS 设置为 ${dns64_1}${dns64_2:+ 和 ${dns64_2}}"
 }
 
 confirm_or_auto() {
@@ -390,23 +437,42 @@ main() {
     select_ping_bin
     collect_servers
 
-    local best
-    if ! best=$(select_best_server); then
+    local results
+    if ! results=$(select_best_servers); then
         die "所有候选均不可达"
     fi
 
-    IFS='|' read -r provider location dns64 prefix source latency <<< "$best"
-    printf '\n'
-    log_color "32;01" "[INFO] 最佳 NAT64 服务器："
-    log_color "33;01" "提供商: ${provider}"
-    log_color "33;01" "地理位置: ${location:-未知}"
-    log_color "33;01" "DNS64: ${dns64}"
-    log_color "33;01" "NAT64 前缀: ${prefix:-未公布}"
-    log_color "33;01" "来源: ${source}"
-    log_color "33;01" "平均延迟: ${latency} ms"
+    local count=0
+    local dns64_1="" dns64_2=""
+    local provider1="" location1="" prefix1="" source1="" latency1=""
+    local provider2="" location2="" prefix2="" source2="" latency2=""
 
-    if confirm_or_auto "是否应用该 DNS64？(y/n) "; then
-        apply_dns64 "$dns64"
+    while IFS='|' read -r provider location dns64 prefix source latency; do
+        ((count++))
+        if ((count == 1)); then
+            provider1="$provider" location1="$location" dns64_1="$dns64"
+            prefix1="$prefix" source1="$source" latency1="$latency"
+        elif ((count == 2)); then
+            provider2="$provider" location2="$location" dns64_2="$dns64"
+            prefix2="$prefix" source2="$source" latency2="$latency"
+            break
+        fi
+    done <<< "$results"
+
+    printf '\n'
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    log_color "32;01" "  ✓ 最佳 NAT64 服务器"
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf "\033[33m  主DNS:\033[0m \033[32m${provider1}\033[0m (${location1:-未知})\n"
+    printf "         \033[36m${dns64_1}\033[0m - \033[33m${latency1} ms\033[0m\n"
+    if [[ -n "$dns64_2" ]]; then
+        printf "\033[33m  备DNS:\033[0m \033[32m${provider2}\033[0m (${location2:-未知})\n"
+        printf "         \033[36m${dns64_2}\033[0m - \033[33m${latency2} ms\033[0m\n"
+    fi
+    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if confirm_or_auto "是否应用这些 DNS64？[y/N] "; then
+        apply_dns64 "$dns64_1" "$dns64_2"
         log_info "配置完成"
     else
         log_warn "已取消配置"
