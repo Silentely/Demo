@@ -12,7 +12,6 @@ SCRIPT_VERSION="2025.11.15"
 PING_COUNT=4
 PING_TIMEOUT=5
 AUTO_APPLY=false
-DEBUG=false
 CURL_MAX_TIME=${CURL_MAX_TIME:-15}
 
 TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t nat64)"
@@ -37,7 +36,7 @@ log_color() {
 log_info() { printf "\033[32;01m[INFO] %s\033[0m\n" "$*" >&2; }
 log_warn() { printf "\033[33;01m[WARN] %s\033[0m\n" "$*" >&2; }
 log_error() { printf "\033[31;01m[ERROR] %s\033[0m\n" "$*" >&2; }
-log_debug() { $DEBUG && printf "\033[35;01m[DEBUG] %s\033[0m\n" "$*" >&2; }
+log_debug() { printf "\033[35;01m[DEBUG] %s\033[0m\n" "$*" >&2; }
 
 format_duration() {
     local secs="${1:-0}"
@@ -136,7 +135,6 @@ usage() {
   -a, --auto-apply       自动应用最佳 DNS64，无需交互
   -c, --count <N>        每台服务器发送的 ping 次数 (默认: ${PING_COUNT})
   -t, --timeout <sec>    ping 命令整体超时秒数 (默认: ${PING_TIMEOUT})
-  -d, --debug            启用调试模式，显示详细错误信息
   -h, --help             查看本帮助
 
 环境变量:
@@ -170,7 +168,6 @@ parse_args() {
     while (($#)); do
         case "$1" in
             -a|--auto-apply) AUTO_APPLY=true ;;
-            -d|--debug) DEBUG=true ;;
             -c|--count)
                 [[ -n ${2:-} ]] || die "--count 需要参数"
                 [[ $2 =~ ^[0-9]+$ ]] || die "--count 仅接受数字"
@@ -327,7 +324,7 @@ check_current_nat64() {
         log_warn "resolv.conf 中未发现 IPv6 DNS，可能无法直接进行 NAT64 检测"
     fi
     if ! $ipv6_ok; then
-        log_warn "IPv6 连接异常，可检查网络或使用 -d 查看更详细日志"
+        log_warn "IPv6 连接异常，可排查网络或查看上方测速日志"
     fi
     if [[ "$prefix_note" == "未检测" ]]; then
         log_warn "无法自动解析 ipv4only.arpa，若需要可手动指定 DNS64。"
@@ -348,19 +345,15 @@ append_entry() {
 
 fetch_with_timeout() {
     local url="$1"
-    local output error_msg
-    if $DEBUG; then
-        output=$(curl -fsSL --max-time "$CURL_MAX_TIME" "$url" 2>&1)
-        local ret=$?
-        if [[ $ret -ne 0 ]]; then
-            log_debug "curl 失败 (退出码: $ret): $url"
-            log_debug "错误信息: $output"
-            return $ret
-        fi
-        echo "$output"
-    else
-        curl -fsSL --max-time "$CURL_MAX_TIME" "$url"
+    local output
+    output=$(curl -fsSL --max-time "$CURL_MAX_TIME" "$url" 2>&1)
+    local ret=$?
+    if [[ $ret -ne 0 ]]; then
+        log_debug "curl 失败 (退出码: $ret): $url"
+        log_debug "错误信息: $output"
+        return $ret
     fi
+    printf '%s' "$output"
 }
 
 fetch_nat64_xyz() {
@@ -548,9 +541,6 @@ deduplicate_servers() {
     awk -F'|' 'NF>=5 && !seen[$3]++ {
         print
     }' "$SERVERS_FILE" > "$filtered"
-    if $DEBUG; then
-        awk -F'|' '{print "[DEBUG] 保留: " $3}' "$filtered" >&2
-    fi
     mv "$filtered" "$SERVERS_FILE"
     log_debug "去重后记录数: $(wc -l < "$SERVERS_FILE")"
 }
@@ -711,7 +701,7 @@ select_best_servers() {
         sorted_lines=$(sort -t'|' -k6 -n "$results_file")
     else
         log_warn "所有候选的延迟探测方法均失败，按列表顺序返回前两个候选"
-        log_warn "提示: 请检查网络连接、防火墙设置或使用 -d 查看详细日志"
+        log_warn "提示: 请检查网络连接、防火墙设置或查看上方详细日志"
         note="延迟探测失败，按候选顺序展示"
         local fallback_count=0
         local fallback_lines=""
