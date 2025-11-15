@@ -205,7 +205,6 @@ init_latency_probes() {
     command -v python3 >/dev/null 2>&1 && LATENCY_PROBES+=("tcp53")
     { command -v dig >/dev/null 2>&1 || command -v drill >/dev/null 2>&1; } && LATENCY_PROBES+=("dns_query")
     [[ ${#LATENCY_PROBES[@]} -gt 0 ]] || LATENCY_PROBES=("icmp_ping")
-    log_info "可用延迟探测方法: ${LATENCY_PROBES[*]}"
 }
 
 is_ipv6_address() {
@@ -359,16 +358,16 @@ fetch_with_timeout() {
 fetch_nat64_xyz() {
     local url="https://raw.githubusercontent.com/level66network/nat64.xyz/refs/heads/main/content/_index.md"
     log_info "抓取 nat64.xyz 列表..."
-    log_debug "请求 URL: $url"
+    log_info "请求 URL: $url"
     local tmp_output
     tmp_output=$(download_source_with_status "nat64.xyz" "$url") || {
         log_warn "nat64.xyz 拉取失败"
         if [[ -n "$DOWNLOAD_LAST_ERROR" ]]; then
-            log_debug "返回内容: $DOWNLOAD_LAST_ERROR"
+            log_info "返回内容: $DOWNLOAD_LAST_ERROR"
         fi
         return 1
     }
-    log_debug "成功获取 nat64.xyz 数据，长度: ${#tmp_output} 字节"
+    log_info "成功获取 nat64.xyz 数据，长度: ${#tmp_output} 字节"
     local added=0
     while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
@@ -410,20 +409,20 @@ fetch_nat64_xyz() {
 fetch_nat64_net() {
     local url="https://nat64.net/public-providers"
     log_info "抓取 nat64.net 列表..."
-    log_debug "请求 URL: $url"
+    log_info "请求 URL: $url"
     local tmp_output
     tmp_output=$(download_source_with_status "nat64.net" "$url") || {
         log_warn "nat64.net 拉取失败"
         if [[ -n "$DOWNLOAD_LAST_ERROR" ]]; then
-            log_debug "返回内容: $DOWNLOAD_LAST_ERROR"
+            log_info "返回内容: $DOWNLOAD_LAST_ERROR"
         fi
         return 1
     }
-    log_debug "成功获取 nat64.net 数据，长度: ${#tmp_output} 字节"
+    log_info "成功获取 nat64.net 数据，长度: ${#tmp_output} 字节"
     local added=0
     while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
-        log_debug "解析到: $provider | $location | $dns64 | $prefix"
+        log_info "解析到: $provider | $location | $dns64 | $prefix"
         append_entry "$provider" "$location" "$dns64" "$prefix" "nat64.net"
         ((added++))
     done < <(echo "$tmp_output" | awk '
@@ -449,7 +448,7 @@ fetch_nat64_net() {
             print provider "|" location "|" dns64 "|" prefix
         }
     }')
-    log_debug "nat64.net 共解析 ${added} 条"
+    log_info "nat64.net 共解析 ${added} 条"
     if ((added == 0)); then
         log_warn "nat64.net 未解析到任何候选"
         return 1
