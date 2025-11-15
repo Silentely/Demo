@@ -12,6 +12,9 @@ SCRIPT_VERSION="2025.11.15"
 PING_COUNT=4
 PING_TIMEOUT=5
 AUTO_APPLY=false
+CURL_MAX_TIME=${CURL_MAX_TIME:-15}
+SKIP_NAT64_NET=${SKIP_NAT64_NET:-false}
+SKIP_NAT64_XYZ=${SKIP_NAT64_XYZ:-false}
 
 TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t nat64)"
 SERVERS_FILE="$TMP_DIR/nat64_servers.list"
@@ -50,6 +53,9 @@ usage() {
 环境变量:
   PING_COUNT             同 --count，优先级低于命令行
   PING_TIMEOUT           同 --timeout，优先级低于命令行
+  CURL_MAX_TIME          网络请求的超时秒数 (默认: ${CURL_MAX_TIME})
+  SKIP_NAT64_NET         设为 true 跳过 nat64.net 数据源
+  SKIP_NAT64_XYZ         设为 true 跳过 nat64.xyz 数据源
 EOF
     exit 0
 }
@@ -120,6 +126,11 @@ append_entry() {
         "$provider" "$location" "$dns64" "$prefix" "$source" >> "$SERVERS_FILE"
 }
 
+fetch_with_timeout() {
+    local url="$1"
+    curl -fsSL --max-time "$CURL_MAX_TIME" "$url"
+}
+
 fetch_nat64_xyz() {
     local url="https://raw.githubusercontent.com/level66network/nat64.xyz/refs/heads/main/content/_index.md"
     local added=0
@@ -129,7 +140,7 @@ fetch_nat64_xyz() {
         append_entry "$provider" "$location" "$dns64" "$prefix" "nat64.xyz"
         ((added++))
     done < <(
-        curl -fsSL "$url" | awk -F'|' '
+        fetch_with_timeout "$url" | awk -F'|' '
         /\|.*\|.*\|/ {
             if ($0 !~ /Provider.*Country.*DNS64/) {
                 provider = $2
@@ -165,97 +176,64 @@ fetch_nat64_xyz() {
 fetch_nat64_net() {
     local url="https://nat64.net/public-providers"
     local added=0
-    command -v python3 >/dev/null 2>&1 || { log_warn "缺少 python3，跳过 nat64.net"; return 1; }
     log_info "抓取 nat64.net 列表..."
     if ! while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
         append_entry "$provider" "$location" "$dns64" "$prefix" "nat64.net"
         ((added++))
     done < <(
-        curl -fsSL "$url" | python3 - <<'PY'
-import sys, re, ipaddress
-from html.parser import HTMLParser
-
-class TableParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.tables = []
-        self._in_table = False
-        self._current_table = []
-        self._current_row = None
-        self._collect = False
-        self._cell = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "table":
-            self._in_table = True
-            self._current_table = []
-        elif tag == "tr" and self._in_table:
-            self._current_row = []
-        elif tag in ("td", "th") and self._in_table:
-            self._collect = True
-            self._cell = []
-
-    def handle_data(self, data):
-        if self._collect:
-            self._cell.append(data.strip())
-
-    def handle_endtag(self, tag):
-        if tag in ("td", "th") and self._collect:
-            text = " ".join(filter(None, self._cell)).strip()
-            text = re.sub(r"\s+", " ", text)
-            self._current_row.append(text)
-            self._collect = False
-        elif tag == "tr" and self._in_table and self._current_row:
-            self._current_table.append(self._current_row)
-        elif tag == "table" and self._in_table:
-            if self._current_table:
-                self.tables.append(self._current_table)
-            self._in_table = False
-
-parser = TableParser()
-parser.feed(sys.stdin.read())
-
-def first_ipv6(text):
-    for candidate in re.split(r"[\\s,;/]+", text or ""):
-        candidate = candidate.strip("[]()")
-        if not candidate:
-            continue
-        try:
-            return str(ipaddress.IPv6Address(candidate))
-        except ValueError:
-            continue
+        fetch_with_timeout "$url" | awk -v RS="</tr>" '
+BEGIN { IGNORECASE = 1 }
+function trim(s){ sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
+function strip_tags(s){ gsub(/<[^>]*>/, " ", s); gsub(/[[:space:]]+/, " ", s); return trim(s) }
+function column(row, idx, parts, cell){
+    n = split(row, parts, "</td>")
+    if (idx > n) return ""
+    cell = parts[idx]
+    sub(/^.*<td[^>]*>/, "", cell)
+    return strip_tags(cell)
+}
+function sanitize_multi(text){
+    gsub(/<br[^>]*>/, " ", text)
+    gsub(/<[^>]*>/, " ", text)
+    gsub(/[\[\]()]/, " ", text)
+    gsub(/,/," ", text)
+    gsub(/;/," ", text)
+    return trim(text)
+}
+function first_prefix(text){
+    if (text == "") return ""
+    text = sanitize_multi(text)
+    if (match(text, /[0-9A-Fa-f:]+\/[0-9]{1,3}/)) {
+        candidate = substr(text, RSTART, RLENGTH)
+        gsub(/[[:space:]]+/, "", candidate)
+        return candidate
+    }
     return ""
-
-def first_prefix(text):
-    for candidate in re.split(r"[\\s,;/]+", text or ""):
-        candidate = candidate.strip("[]()")
-        if not candidate:
-            continue
-        try:
-            return str(ipaddress.IPv6Network(candidate, strict=False))
-        except ValueError:
-            continue
-    return ""
-
-for table in parser.tables:
-    header = [c.lower() for c in table[0]]
-    if "provider" in header and "dns64 address" in header:
-        idx_provider = header.index("provider")
-        idx_location = header.index("location") if "location" in header else None
-        idx_dns = header.index("dns64 address")
-        idx_prefix = header.index("nat64 prefixes") if "nat64 prefixes" in header else None
-        for row in table[1:]:
-            if idx_dns >= len(row):
-                continue
-            provider = row[idx_provider].strip() if idx_provider < len(row) else ""
-            location = row[idx_location].strip() if idx_location is not None and idx_location < len(row) else ""
-            dns64 = first_ipv6(row[idx_dns])
-            prefix = first_prefix(row[idx_prefix]) if idx_prefix is not None and idx_prefix < len(row) else ""
-            if provider and dns64:
-                print(f"{provider}|{location}|{dns64}|{prefix}")
-        break
-PY
+}
+function emit_dns(provider, location, dnsfield, prefixfield, tokens, n, token, prefix, i){
+    if (dnsfield == "") return
+    dnsfield = sanitize_multi(dnsfield)
+    prefix = first_prefix(prefixfield)
+    n = split(dnsfield, tokens, /[[:space:]]+/)
+    for (i = 1; i <= n; i++) {
+        token = tokens[i]
+        if (token == "" || index(token, "/") > 0) continue
+        gsub(/[^0-9A-Fa-f:]/, "", token)
+        if (token ~ /:/ && token !~ /^:+$/) {
+            print provider "|" location "|" token "|" prefix
+        }
+    }
+}
+/<td/ {
+    provider = column($0, 1)
+    if (tolower(provider) == "provider" || provider == "") next
+    location = column($0, 2)
+    dnsfield = column($0, 3)
+    prefixfield = column($0, 4)
+    emit_dns(provider, location, dnsfield, prefixfield)
+}
+'
     ); then
         log_warn "nat64.net 拉取失败"
         return 1
@@ -286,8 +264,24 @@ deduplicate_servers() {
 collect_servers() {
     : > "$SERVERS_FILE"
     local success=0
-    fetch_nat64_net && ((success++))
-    fetch_nat64_xyz && ((success++))
+    if [[ "${SKIP_NAT64_NET,,}" != "true" ]]; then
+        if fetch_nat64_net; then
+            ((success++))
+        else
+            log_warn "nat64.net 数据源不可用"
+        fi
+    else
+        log_warn "已按配置跳过 nat64.net 数据源"
+    fi
+    if [[ "${SKIP_NAT64_XYZ,,}" != "true" ]]; then
+        if fetch_nat64_xyz; then
+            ((success++))
+        else
+            log_warn "nat64.xyz 数据源不可用"
+        fi
+    else
+        log_warn "已按配置跳过 nat64.xyz 数据源"
+    fi
     if [[ ! -s "$SERVERS_FILE" ]]; then
         add_static_fallback
     fi

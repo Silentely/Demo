@@ -9,7 +9,7 @@
 </p>
 
 > **🔧 纯自用，佛系维护，如果有任何问题，请自己解决 🔧**  
-> **🕙 最后更新: 2025-07-29**
+> **🕙 最后更新: 2025-11-15**
 
 ## 📁 项目结构
 
@@ -207,8 +207,183 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 **支持参数**:
 - `-h, --help`  help 显示帮助信息
 
+### 🌐 nat64_optimizer.sh - NAT64/DNS64 自动优选工具
+**脚本概述**:
+```
+╭──────────────────────────────────────────╮
+│    NAT64/DNS64 自动优选脚本              │
+╰──────────────────────────────────────────╯
+```
+**功能**:
+- 🔍 自动从多个源获取NAT64/DNS64服务器列表
+- 📊 智能测试延迟并选择最佳服务器
+- ⚙️ 自动配置系统DNS和systemd-resolved
+- 🔄 支持自动应用或交互式确认
+- 📝 详细的日志记录和错误处理
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/nat64_optimizer.sh)
+```
+
+**支持参数**:
+- `-a, --auto-apply` 🤖 自动应用最佳DNS64，无需交互
+- `-c, --count <N>` 📊 每台服务器发送的ping次数（默认：4）
+- `-t, --timeout <sec>` ⏱️ ping命令整体超时秒数（默认：5）
+- `-h, --help` ❓ 显示帮助信息
+
+### 🔄 all_http_socks5.sh - HTTP与SOCKS5代理一键部署
+**脚本概述**:
+```
+┌─────────────────────────┐
+│  代理服务器一键部署工具  │
+└─────────────────────────┘
+```
+**功能**:
+- 🌐 自动安装和配置Squid HTTP代理（端口25562）
+- 🔐 配置HTTP代理认证
+- 🧦 自动安装SOCKS5代理（端口25543）
+- 📦 一键完成双代理部署
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/all_http_socks5.sh)
+```
+
+### 🧦 socks5_install.sh - Dante SOCKS5服务器安装
+**脚本概述**:
+```
+Dante Socks5 Server AutoInstall
+```
+**功能**:
+- 🔧 自动检测系统类型（Debian/Ubuntu/CentOS）
+- 📥 从GitHub或备用源下载安装脚本
+- ⚙️ 支持自定义端口、用户名和密码
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/socks5_install.sh)
+```
+
+**支持参数**:
+- `--port=<端口>` 指定SOCKS5端口
+- `--user=<用户名>` 指定认证用户名
+- `--passwd=<密码>` 指定认证密码
+- `--no-github` 使用备用下载源
+
+### 🛡️ install_ufw_cloudflare.sh - UFW防火墙Cloudflare配置
+**脚本概述**:
+```
+╔════════════════════════════════════╗
+║  UFW + Cloudflare IP 白名单配置   ║
+╚════════════════════════════════════╝
+```
+**功能**:
+- 🔥 自动安装和配置UFW防火墙
+- ☁️ 获取最新的Cloudflare IPv4/IPv6地址
+- 🔓 仅允许Cloudflare IP访问80/443端口
+- 🔑 自动开放SSH（22）端口
+- 🛡️ 默认拒绝其他入站连接
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/install_ufw_cloudflare.sh)
+```
+
+### 🚫 block-ips.sh - 国家IP封禁工具
+**脚本概述**:
+```
+Linux VPS一键屏蔽指定国家所有的IP访问
+```
+**功能**:
+- 🌍 根据国家代码封禁整个国家的IP段
+- 📋 使用ipset高效管理大量IP规则
+- 🔓 支持解封已封禁的国家IP
+- 📊 查看当前封禁列表
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/block-ips.sh)
+```
+
+**功能选项**:
+1. 封禁IP - 输入国家代码（如cn）进行封禁
+2. 解封IP - 输入国家代码进行解封
+3. 查看封禁列表 - 显示当前所有封禁规则
+
+### 🐳 docker-ca.sh - Docker TLS证书自动配置
+**脚本概述**:
+```
+╭───────────────────────────╮
+│  Docker TLS 安全配置工具  │
+╰───────────────────────────╯
+```
+**功能**:
+- 🔐 自动生成CA证书和服务器/客户端证书
+- 🌐 支持IP地址和域名的TLS配置
+- 🔄 自动配置证书续期定时任务（每15天检查）
+- 🛡️ 配置Docker守护进程使用TLS验证
+- 💾 自动备份原有配置
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/docker/docker-ca.sh)
+```
+
+### 💾 backup_postgres.sh - PostgreSQL自动备份工具
+**脚本概述**:
+```
+╔═══════════════════════════════════╗
+║  PostgreSQL 数据库自动化备份脚本  ║
+╚═══════════════════════════════════╝
+```
+**功能**:
+- 🗄️ 使用pg_dump进行数据库备份
+- 🔐 通过.pgpass文件实现免密备份
+- 📅 生成带时间戳的备份文件
+- 📝 详细的执行日志记录
+- 🧹 自动清理指定天数前的旧备份
+- ⏰ 支持cron定时任务
+
+**使用方法**:
+```bash
+# 1. 配置.pgpass文件（必需）
+echo "localhost:5432:数据库名:用户名:密码" > ~/.pgpass
+chmod 600 ~/.pgpass
+
+# 2. 编辑脚本中的配置参数
+# 3. 运行脚本
+bash /path/to/backup_postgres.sh
+
+# 4. 设置定时任务（可选）
+# crontab -e
+# 30 2 * * * /path/to/backup_postgres.sh > /dev/null 2>&1
+```
+
+### 📦 QLOneKeyDependency.sh - 青龙面板依赖一键安装
+**脚本概述**:
+```
+青龙面板依赖一键安装脚本
+```
+**功能**:
+- 📚 自动安装青龙面板所需的Node.js依赖
+- 🐍 安装Python依赖包
+- 🎨 安装Canvas等图形处理库
+- 🔧 配置npm镜像源加速下载
+- 🚀 支持pnpm包管理器
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/QLOneKeyDependency.sh)
+```
+
+**注意事项**:
+- 需要在青龙面板容器内执行
+- 确保已安装Node.js和npm
+- 安装完成后建议重启Docker容器
+
 ### 🌐 http_install.sh
-**脚本概述**: 
+**脚本概述**:
 ```
 HTTP代理自动配置工具
 ```
@@ -281,6 +456,32 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/Network-Reinstall-System-Modify.sh)
 ```
 
+## 📂 Work目录 - Cloudflare Workers脚本
+
+### 🌐 mirror.js - Docker镜像代理
+**功能**: 通过Cloudflare Workers代理Docker Hub，加速镜像拉取
+**使用**: 修改daemon.json添加`"registry-mirrors": ["https://你的域名"]`
+
+### 📱 wx.js - 企业微信推送
+**功能**: 企业微信消息推送服务，支持文本、图文、Markdown等多种格式
+
+### 🔐 tgapi.js - Telegram Bot API代理
+**功能**: 代理Telegram Bot API请求，解决访问限制
+
+### 🌉 proxy.js - 通用Web代理
+**功能**: 基于Cloudflare Workers的通用HTTP/HTTPS代理
+
+## 🐍 Python脚本
+
+### ⚔️ cc.py - Layer 7 DDoS测试工具
+**功能**: 支持CC、POST、Slowloris攻击模式，支持SOCKS4/5代理
+**⚠️ 警告**: 仅用于授权的安全测试，禁止攻击.gov网站
+
+## 🔧 GitHub Actions
+
+### 🐳 deploy-docker.yml - Docker镜像CI/CD
+**功能**: 自动构建Docker镜像并推送到Docker Hub，基于Git Tag管理版本
+
 ## 📖 文档
 
 - [目录结构说明](docs/structure.md) - 详细介绍项目目录结构
@@ -292,18 +493,25 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 ```
 # 使用频率统计 (仅供参考)
 statistics = {
-    'install-latest-ssh.sh': '★★★★★',
+    'nat64_optimizer.sh': '★★★★★',
+    'install-system-information.sh': '★★★★★',
     'LocaleCN.sh': '★★★★★',
     'cleanup.sh': '★★★★☆',
-    'terminal_optimizer.sh': '新脚本待统计',
+    'terminal_optimizer.sh': '★★★★☆',
     'ssh_key.sh': '★★★★☆',
+    'docker-ca.sh': '★★★☆☆',
+    'backup_postgres.sh': '★★★☆☆',
     'swap.sh': '★★★☆☆',
     'ChangeMirrors.sh': '★★★☆☆',
     'DockerInstallation.sh': '★★★☆☆',
+    'all_http_socks5.sh': '★★☆☆☆',
+    'install_ufw_cloudflare.sh': '★★☆☆☆',
     'dd-od.sh': '★★☆☆☆',
     'gost.sh': '★★☆☆☆',
     'http_install.sh': '★★☆☆☆',
+    'block-ips.sh': '★☆☆☆☆',
     'clean_snap.sh': '★☆☆☆☆',
+    'QLOneKeyDependency.sh': '★☆☆☆☆',
     'Network-Reinstall-System-Modify.sh': '★☆☆☆☆'
 }
 ```
