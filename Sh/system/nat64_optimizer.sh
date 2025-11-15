@@ -123,7 +123,7 @@ init_latency_probes() {
     command -v python3 >/dev/null 2>&1 && LATENCY_PROBES+=("tcp53")
     { command -v dig >/dev/null 2>&1 || command -v drill >/dev/null 2>&1; } && LATENCY_PROBES+=("dns_query")
     [[ ${#LATENCY_PROBES[@]} -gt 0 ]] || LATENCY_PROBES=("icmp_ping")
-    log_debug "可用延迟探测方法: ${LATENCY_PROBES[*]}"
+    log_info "可用延迟探测方法: ${LATENCY_PROBES[*]}"
 }
 
 is_ipv6_address() {
@@ -584,17 +584,15 @@ probe_dns_query() {
 ping_latency() {
     local target="$1" method raw status
     for method in "${LATENCY_PROBES[@]}"; do
-        log_debug "尝试使用 ${method} 探测 ${target}..."
         raw=$(probe_"${method}" "$target" 2>&1)
         status=$?
         if [[ $status -eq 0 && -n "$raw" ]]; then
-            log_info "✓ 使用 ${method} 探测成功: ${raw} ms"
+            log_debug "✓ 使用 ${method} 探测成功: ${raw} ms"
             printf '%s\n' "${raw%.*}"
             return 0
         fi
         log_debug "✗ ${method} 探测失败 (exit=${status}): ${raw:-<无输出>}"
     done
-    log_warn "所有探测方法均失败: ${target}"
     return 1
 }
 
