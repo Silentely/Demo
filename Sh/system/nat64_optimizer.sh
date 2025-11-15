@@ -205,31 +205,26 @@ fetch_nat64_net() {
         log_debug "解析到: $provider | $location | $dns64 | $prefix"
         append_entry "$provider" "$location" "$dns64" "$prefix" "nat64.net"
         ((added++))
-    done < <(echo "$tmp_output" | grep -oP '<tr>.*?</tr>' | awk -F'<td>|</td>' '
-    /<td>/ {
-        provider = ""
-        location = ""
-        dns64 = ""
-        prefix = ""
+    done < <(echo "$tmp_output" | awk '
+    BEGIN { in_second_table = 0; col = 0 }
+    /<table border="1">/ { table_count++; if (table_count == 2) in_second_table = 1 }
+    /<\/table>/ { if (in_second_table) in_second_table = 0 }
+    in_second_table && /<tr>/ { col = 0; provider = ""; location = ""; dns64 = ""; prefix = "" }
+    in_second_table && /<td>/ {
+        col++
+        content = $0
+        gsub(/.*<td>/, "", content)
+        gsub(/<\/td>.*/, "", content)
+        gsub(/<[^>]*>/, "", content)
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", content)
 
-        for (i = 1; i <= NF; i++) {
-            gsub(/<[^>]*>/, "", $i)
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
-            if ($i == "" || $i == "Provider" || $i == "Location") continue
-
-            if (provider == "") {
-                provider = $i
-            } else if (location == "") {
-                location = $i
-            } else if (dns64 == "" && $i ~ /[0-9a-fA-F:]+::[0-9a-fA-F:]*/) {
-                dns64 = $i
-                gsub(/[^0-9a-fA-F:]/, "", dns64)
-            } else if (prefix == "" && $i ~ /[0-9]/) {
-                prefix = $i
-            }
-        }
-
-        if (provider != "" && dns64 != "") {
+        if (col == 1) provider = content
+        else if (col == 2) location = content
+        else if (col == 3 && content ~ /[0-9a-fA-F:]+::[0-9a-fA-F:]*/) dns64 = content
+        else if (col == 4) prefix = content
+    }
+    in_second_table && /<\/tr>/ {
+        if (provider != "" && dns64 != "" && provider != "Provider") {
             print provider "|" location "|" dns64 "|" prefix
         }
     }')
@@ -275,8 +270,14 @@ add_static_fallback() {
 
 deduplicate_servers() {
     local filtered="$TMP_DIR/nat64_servers.filtered"
-    awk -F'|' 'NF>=5 && !seen[$3]++' "$SERVERS_FILE" > "$filtered" 2>/dev/null || true
+    log_debug "去重前记录数: $(wc -l < "$SERVERS_FILE")"
+    awk -F'|' 'NF>=5 && !seen[$3]++ {
+        if (seen[$3] == 1) print "[DEBUG] 保留: " $3 > "/dev/stderr"
+    }' "$SERVERS_FILE" > "$filtered" 2>&1 | while read -r line; do
+        $DEBUG && echo "$line" >&2
+    done
     mv "$filtered" "$SERVERS_FILE"
+    log_debug "去重后记录数: $(wc -l < "$SERVERS_FILE")"
 }
 
 select_sources() {
