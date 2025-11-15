@@ -129,14 +129,15 @@ fetch_with_timeout() {
 
 fetch_nat64_xyz() {
     local url="https://raw.githubusercontent.com/level66network/nat64.xyz/refs/heads/main/content/_index.md"
-    local added=0
     log_info "抓取 nat64.xyz 列表..."
-    if ! while IFS='|' read -r provider location dns64 prefix; do
+    local tmp_output
+    tmp_output=$(fetch_with_timeout "$url" 2>&1) || { log_warn "nat64.xyz 拉取失败"; return 1; }
+    local added=0
+    while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
         append_entry "$provider" "$location" "$dns64" "$prefix" "nat64.xyz"
         ((added++))
-    done < <(
-        fetch_with_timeout "$url" | awk -F'|' '
+    done < <(echo "$tmp_output" | awk -F'|' '
         /\|.*\|.*\|/ {
             if ($0 !~ /Provider.*Country.*DNS64/) {
                 provider = $2
@@ -160,25 +161,22 @@ fetch_nat64_xyz() {
                     }
                 }
             }
-        }'
-    ); then
-        log_warn "nat64.xyz 拉取失败"
-        return 1
-    fi
+        }')
     log_info "nat64.xyz 添加 ${added} 条候选"
     [[ $added -gt 0 ]]
 }
 
 fetch_nat64_net() {
     local url="https://nat64.net/public-providers"
-    local added=0
     log_info "抓取 nat64.net 列表..."
-    if ! while IFS='|' read -r provider location dns64 prefix; do
+    local tmp_output
+    tmp_output=$(fetch_with_timeout "$url" 2>&1) || { log_warn "nat64.net 拉取失败"; return 1; }
+    local added=0
+    while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
         append_entry "$provider" "$location" "$dns64" "$prefix" "nat64.net"
         ((added++))
-    done < <(
-        fetch_with_timeout "$url" | awk -v RS="</tr>" '
+    done < <(echo "$tmp_output" | awk -v RS="</tr>" '
 BEGIN { IGNORECASE = 1 }
 function trim(s){ sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
 function strip_tags(s){ gsub(/<[^>]*>/, " ", s); gsub(/[[:space:]]+/, " ", s); return trim(s) }
@@ -229,11 +227,7 @@ function emit_dns(provider, location, dnsfield, prefixfield, tokens, n, token, p
     prefixfield = column($0, 4)
     emit_dns(provider, location, dnsfield, prefixfield)
 }
-'
-    ); then
-        log_warn "nat64.net 拉取失败"
-        return 1
-    fi
+')
     log_info "nat64.net 添加 ${added} 条候选"
     [[ $added -gt 0 ]]
 }
@@ -280,17 +274,19 @@ deduplicate_servers() {
 }
 
 select_sources() {
-    printf '\n' >&2
-    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    log_color "36;01" "  DNS64 数据源选择"
-    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    printf "\033[32m  1)\033[0m 全部数据源 \033[33m(推荐)\033[0m\n" >&2
-    printf "\033[32m  2)\033[0m 仅 nat64.net\n" >&2
-    printf "\033[32m  3)\033[0m 仅 nat64.xyz\n" >&2
-    printf "\033[32m  4)\033[0m 仅静态公开列表\n" >&2
-    printf "\033[32m  5)\033[0m nat64.net + nat64.xyz\n" >&2
-    printf "\033[32m  6)\033[0m nat64.net + 静态列表\n" >&2
-    log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    {
+        printf '\n'
+        log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        log_color "36;01" "  DNS64 数据源选择"
+        log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        printf "\033[32m  1)\033[0m 全部数据源 \033[33m(推荐)\033[0m\n"
+        printf "\033[32m  2)\033[0m 仅 nat64.net\n"
+        printf "\033[32m  3)\033[0m 仅 nat64.xyz\n"
+        printf "\033[32m  4)\033[0m 仅静态公开列表\n"
+        printf "\033[32m  5)\033[0m nat64.net + nat64.xyz\n"
+        printf "\033[32m  6)\033[0m nat64.net + 静态列表\n"
+        log_color "36;01" "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    } >&2
     local choice
     read -rp "$(printf '\033[36;01m请选择 [1-6] (默认: 1): \033[0m')" choice </dev/tty
     choice=${choice:-1}
