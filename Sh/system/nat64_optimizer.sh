@@ -202,62 +202,40 @@ fetch_nat64_net() {
     local added=0
     while IFS='|' read -r provider location dns64 prefix; do
         [[ -z "$dns64" ]] && continue
+        log_debug "解析到: $provider | $location | $dns64 | $prefix"
         append_entry "$provider" "$location" "$dns64" "$prefix" "nat64.net"
         ((added++))
-    done < <(echo "$tmp_output" | awk -v RS="</tr>" '
-BEGIN { IGNORECASE = 1 }
-function trim(s){ sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); return s }
-function strip_tags(s){ gsub(/<[^>]*>/, " ", s); gsub(/[[:space:]]+/, " ", s); return trim(s) }
-function column(row, idx, parts, cell){
-    n = split(row, parts, "</td>")
-    if (idx > n) return ""
-    cell = parts[idx]
-    sub(/^.*<td[^>]*>/, "", cell)
-    return strip_tags(cell)
-}
-function sanitize_multi(text){
-    gsub(/<br[^>]*>/, " ", text)
-    gsub(/<[^>]*>/, " ", text)
-    gsub(/[\[\]()]/, " ", text)
-    gsub(/,/," ", text)
-    gsub(/;/," ", text)
-    return trim(text)
-}
-function first_prefix(text){
-    if (text == "") return ""
-    text = sanitize_multi(text)
-    if (match(text, /[0-9A-Fa-f:]+\/[0-9]{1,3}/)) {
-        candidate = substr(text, RSTART, RLENGTH)
-        gsub(/[[:space:]]+/, "", candidate)
-        return candidate
-    }
-    return ""
-}
-function emit_dns(provider, location, dnsfield, prefixfield, tokens, n, token, prefix, i){
-    if (dnsfield == "") return
-    dnsfield = sanitize_multi(dnsfield)
-    prefix = first_prefix(prefixfield)
-    n = split(dnsfield, tokens, /[[:space:]]+/)
-    for (i = 1; i <= n; i++) {
-        token = tokens[i]
-        if (token == "" || index(token, "/") > 0) continue
-        gsub(/[^0-9A-Fa-f:]/, "", token)
-        if (token ~ /:/ && token !~ /^:+$/) {
-            print provider "|" location "|" token "|" prefix
+    done < <(echo "$tmp_output" | grep -oP '<tr>.*?</tr>' | awk -F'<td>|</td>' '
+    /<td>/ {
+        provider = ""
+        location = ""
+        dns64 = ""
+        prefix = ""
+
+        for (i = 1; i <= NF; i++) {
+            gsub(/<[^>]*>/, "", $i)
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i)
+            if ($i == "" || $i == "Provider" || $i == "Location") continue
+
+            if (provider == "") {
+                provider = $i
+            } else if (location == "") {
+                location = $i
+            } else if (dns64 == "" && $i ~ /[0-9a-fA-F:]+::[0-9a-fA-F:]*/) {
+                dns64 = $i
+                gsub(/[^0-9a-fA-F:]/, "", dns64)
+            } else if (prefix == "" && $i ~ /[0-9]/) {
+                prefix = $i
+            }
         }
-    }
-}
-/<td/ {
-    provider = column($0, 1)
-    if (tolower(provider) == "provider" || provider == "") next
-    location = column($0, 2)
-    dnsfield = column($0, 3)
-    prefixfield = column($0, 4)
-    emit_dns(provider, location, dnsfield, prefixfield)
-}
-')
+
+        if (provider != "" && dns64 != "") {
+            print provider "|" location "|" dns64 "|" prefix
+        }
+    }')
+    log_debug "nat64.net 共解析 ${added} 条"
     log_info "nat64.net 添加 ${added} 条候选"
-    [[ $added -gt 0 ]]
+    return 0
 }
 
 fetch_static_public_list() {
