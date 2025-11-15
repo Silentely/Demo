@@ -19,6 +19,7 @@ TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t nat64)"
 SERVERS_FILE="$TMP_DIR/nat64_servers.list"
 PING_BIN=()
 SOURCE_SUCCESS_COUNT=0
+LATENCY_PROBES=()
 
 cleanup() {
     rm -rf "$TMP_DIR"
@@ -113,6 +114,15 @@ select_ping_bin() {
     else
         die "未找到 ping/ping6 命令"
     fi
+}
+
+init_latency_probes() {
+    LATENCY_PROBES=()
+    command -v ping >/dev/null 2>&1 && LATENCY_PROBES+=("icmp_ping")
+    command -v python3 >/dev/null 2>&1 && LATENCY_PROBES+=("tcp53")
+    { command -v dig >/dev/null 2>&1 || command -v drill >/dev/null 2>&1; } && LATENCY_PROBES+=("dns_query")
+    [[ ${#LATENCY_PROBES[@]} -gt 0 ]] || LATENCY_PROBES=("icmp_ping")
+    log_debug "可用延迟探测方法: ${LATENCY_PROBES[*]}"
 }
 
 append_entry() {
@@ -388,16 +398,65 @@ collect_servers() {
     log_info "成功加载 ${SOURCE_SUCCESS_COUNT} 个数据源"
 }
 
-ping_latency() {
-    local target="$1"
+probe_icmp_ping() {
+    local target="$1" os timeout_flag=() cmd=("${PING_BIN[@]}")
+    os=$(uname -s)
+    [[ ${#cmd[@]} -eq 0 ]] && cmd=(ping)
+    if [[ "$os" == "Darwin" ]]; then
+        timeout_flag=(-W "$((PING_TIMEOUT * 1000))")
+        [[ ${cmd[0]} == "ping6" ]] || cmd=(ping6)
+    else
+        timeout_flag=(-w "$PING_TIMEOUT")
+    fi
     local output
-    if ! output=$("${PING_BIN[@]}" -c "$PING_COUNT" -w "$PING_TIMEOUT" "$target" 2>/dev/null); then
+    if ! output=$("${cmd[@]}" -n -c "$PING_COUNT" "${timeout_flag[@]}" "$target" 2>/dev/null); then
         return 1
     fi
-    local latency
-    latency=$(awk -F'/' '/(rtt|round-trip)/ {print $5}' <<< "$output")
+    awk -F'[=/ ]+' '/(rtt|min\/avg|round-trip)/ {printf "%.0f\n", $(NF-2); exit}' <<< "$output"
+}
+
+probe_tcp53() {
+    local target="$1"
+    python3 - "$target" "$PING_TIMEOUT" <<'PY' 2>/dev/null || return 1
+import socket, sys, time
+try:
+    dst = sys.argv[1]
+    timeout = int(sys.argv[2])
+    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    start = time.time()
+    sock.connect((dst, 53))
+    print(int((time.time() - start) * 1000))
+    sock.close()
+except:
+    sys.exit(1)
+PY
+}
+
+probe_dns_query() {
+    local target="$1" tool=() output latency
+    if command -v dig >/dev/null 2>&1; then
+        tool=(dig +tries=1 +time="$PING_TIMEOUT" +stats @"$target" ipv4only.arpa AAAA)
+    else
+        tool=(drill -T "$PING_TIMEOUT" @"$target" ipv4only.arpa AAAA)
+    fi
+    output=$("${tool[@]}" 2>/dev/null) || return 1
+    latency=$(awk '/Query time:/ {print $4}' <<< "$output")
     [[ -n "$latency" ]] || return 1
-    printf '%s\n' "${latency%.*}"
+    printf '%s\n' "$latency"
+}
+
+ping_latency() {
+    local target="$1" method value
+    for method in "${LATENCY_PROBES[@]}"; do
+        if value=$(probe_"${method}" "$target" 2>/dev/null); then
+            [[ -n "$value" ]] || continue
+            log_debug "使用 $method 探测 $target: ${value}ms"
+            printf '%s\n' "$value"
+            return 0
+        fi
+    done
+    return 1
 }
 
 select_best_servers() {
@@ -490,6 +549,7 @@ main() {
     ensure_utf8_locale
     require_cmds curl awk
     select_ping_bin
+    init_latency_probes
     collect_servers
 
     local results
