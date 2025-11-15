@@ -132,20 +132,22 @@ is_ipv6_address() {
 
 format_status_table() {
     local rows="$1"
-    printf '┌─────────────────────────────────────────────────────────┐\n'
-    printf '│                     当前NAT64状态                        │\n'
-    printf '├─────────────────────┬─────────────────────┬─────────────┤\n'
-    printf '│ DNS服务器           │ 状态               │ 延迟        │\n'
-    printf '├─────────────────────┼─────────────────────┼─────────────┤\n'
+    printf '┌────────────────────────┬─────┬──────────┐\n'
+    printf '│     当前NAT64状态      │     │          │\n'
+    printf '├────────────────────────┼─────┼──────────┤\n'
+    printf '│ DNS服务器              │状态 │  延迟    │\n'
+    printf '├────────────────────────┼─────┼──────────┤\n'
     if [[ -z "$rows" ]]; then
-        printf '│ %-19s │ %-19s │ %-9s │\n' "未配置" "N/A" "N/A"
+        printf '│ %-22s │  -  │   N/A    │\n' "未配置"
     else
         while IFS='|' read -r dns status latency; do
             [[ -z "$dns" ]] && continue
-            printf '│ %-19s │ %-19s │ %-9s │\n' "$dns" "$status" "$latency"
+            printf '│ %-22s │  ' "$dns"
+            printf '%b' "$status"
+            printf '  │ %-8s │\n' "$latency"
         done <<< "$rows"
     fi
-    printf '└─────────────────────┴─────────────────────┴─────────────┘\n'
+    printf '└────────────────────────┴─────┴──────────┘\n'
 }
 
 check_ipv6_connectivity() {
@@ -191,7 +193,7 @@ check_current_nat64() {
     mapfile -t nameservers < <(awk '/^nameserver/ {print $2}' "$RESOLV_CONF" 2>/dev/null | awk 'NF' | uniq)
 
     if ((${#nameservers[@]} == 0)); then
-        table_rows="未配置|\033[33m✗ 未设置\033[0m|N/A"$'\n'
+        table_rows=$'未配置|\033[33m-\033[0m|N/A\n'
     else
         local ns latency status
         for ns in "${nameservers[@]}"; do
@@ -199,14 +201,14 @@ check_current_nat64() {
             if is_ipv6_address "$ns"; then
                 [[ -z "$first_ipv6" ]] && first_ipv6="$ns"
                 if latency=$(ping_latency "$ns" 2>/dev/null); then
-                    status='\033[32m✓ 可达\033[0m'
+                    status=$'\033[32m✓\033[0m'
                     latency="${latency}ms"
                 else
-                    status='\033[31m✗ 不可达\033[0m'
+                    status=$'\033[31m✗\033[0m'
                     latency="N/A"
                 fi
             else
-                status='\033[33m✗ 非IPv6\033[0m'
+                status=$'\033[33m-\033[0m'
                 latency="N/A"
             fi
             table_rows+="${ns}|${status}|${latency}"$'\n'
@@ -236,9 +238,15 @@ check_current_nat64() {
     printf "NAT64前缀: %s (%s)\n\n" "$prefix_display" "$prefix_note"
 
     # 排障建议
-    [[ -z "$first_ipv6" ]] && log_warn "resolv.conf 中未发现 IPv6 DNS，可能无法直接进行 NAT64 检测"
-    $ipv6_ok || log_warn "IPv6 连接异常，可检查网络或使用 -d 查看更详细日志"
-    [[ "$prefix_note" == "未检测" ]] && log_warn "无法自动解析 ipv4only.arpa，若需要可手动指定 DNS64。"
+    if [[ -z "$first_ipv6" ]]; then
+        log_warn "resolv.conf 中未发现 IPv6 DNS，可能无法直接进行 NAT64 检测"
+    fi
+    if ! $ipv6_ok; then
+        log_warn "IPv6 连接异常，可检查网络或使用 -d 查看更详细日志"
+    fi
+    if [[ "$prefix_note" == "未检测" ]]; then
+        log_warn "无法自动解析 ipv4only.arpa，若需要可手动指定 DNS64。"
+    fi
 }
 
 append_entry() {
