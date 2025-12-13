@@ -6,25 +6,57 @@
   <img src="https://img.shields.io/badge/维护状态-佛系-orange?style=for-the-badge&logo=buddhism" alt="佛系维护">
   <img src="https://img.shields.io/badge/用途-自用-blue?style=for-the-badge&logo=linux" alt="自用脚本">
   <img src="https://img.shields.io/badge/环境-Shell-brightgreen?style=for-the-badge&logo=gnubash" alt="Shell">
+  <img src="https://img.shields.io/badge/Python-3.x-yellow?style=for-the-badge&logo=python" alt="Python">
 </p>
 
-> **🔧 纯自用，佛系维护，如果有任何问题，请自己解决 🔧**  
-> **🕙 最后更新: 2025-11-15**
+<p align="center">
+  <img src="https://img.shields.io/github/license/Silentely/Demo?style=flat-square" alt="License">
+  <img src="https://img.shields.io/github/last-commit/Silentely/Demo?style=flat-square" alt="Last Commit">
+  <img src="https://img.shields.io/github/stars/Silentely/Demo?style=flat-square" alt="Stars">
+  <img src="https://img.shields.io/github/forks/Silentely/Demo?style=flat-square" alt="Forks">
+</p>
+
+> **🔧 纯自用，佛系维护，如果有任何问题，请自己解决 🔧**
+> **🕙 最后更新: 2025-12-14**
+
+---
+
+## 📑 目录
+
+- [项目结构](#-项目结构)
+- [快速开始](#-快速开始)
+- [Shell脚本使用说明](#-shell脚本使用说明)
+  - [系统工具](#系统工具)
+  - [网络工具](#网络工具)
+  - [Docker工具](#docker工具)
+  - [通用工具](#通用工具)
+- [Cloudflare Workers](#-work目录---cloudflare-workers脚本)
+- [Python脚本](#-python脚本)
+- [题库转换工具](#-题库转换工具)
+- [GitHub Actions](#-github-actions)
+- [AI上下文文档](#-ai上下文文档)
+- [文档](#-文档)
+- [贡献](#-贡献)
+- [License](#license)
+
+---
 
 ## 📁 项目结构
 
 ```
 Demo/
 ├── Sh/              # 主要的Shell脚本目录
-│   ├── system/      # 系统相关脚本
-│   ├── network/     # 网络相关脚本
-│   ├── docker/      # Docker相关脚本
-│   └── utils/       # 通用工具脚本
-├── Action/          # 自动化动作脚本
-├── Work/            # 工作相关脚本
+│   ├── system/      # 系统相关脚本 (清理、优化、NAT64等)
+│   ├── network/     # 网络相关脚本 (代理、防火墙等)
+│   ├── docker/      # Docker相关脚本 (安装、证书)
+│   └── utils/       # 通用工具脚本 (备份、SSH等)
+├── Action/          # GitHub Actions 工作流模板
+├── Work/            # Cloudflare Workers 脚本
 ├── py/              # Python脚本
+├── tiku/            # 题库格式转换工具 (新增)
 ├── lib/             # 公共库文件
 ├── docs/            # 项目文档
+├── CLAUDE.md        # AI上下文索引文档
 ├── LICENSE          # 许可证文件
 └── README.md        # 项目说明文件
 ```
@@ -477,10 +509,84 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 **功能**: 支持CC、POST、Slowloris攻击模式，支持SOCKS4/5代理
 **⚠️ 警告**: 仅用于授权的安全测试，禁止攻击.gov网站
 
+## 📝 题库转换工具
+
+### 📚 convert_all_questions_motibang.py - 磨题帮格式转换
+**脚本概述**:
+```
+╭────────────────────────────────────╮
+│   多格式题库转换工具 - 磨题帮版   │
+╰────────────────────────────────────╯
+```
+**功能**:
+- 📄 支持多种输入格式：Excel (.xlsx)、Word (.docx)、旧版Word (.doc)、纯文本 (.txt)
+- 🔍 智能识别题型：单选、多选、判断、填空、简答
+- 🔢 自动规范化选项编号（支持ABCD/abcd/1234等格式）
+- 📊 输出标准化的磨题帮格式Excel文件
+- 🔄 批量处理整个文件夹
+
+**使用方法**:
+```bash
+cd tiku
+python convert_all_questions_motibang.py
+# 按提示输入源文件夹和目标文件夹路径
+```
+
+### 📖 convert_all_questions_shuatidadang.py - 刷题搭档格式转换
+**功能**:
+- 📄 与磨题帮版类似的多格式支持
+- 📊 输出刷题搭档APP兼容的标准格式
+- 🧹 自动清理全角/半角字符混用问题
+
+**使用方法**:
+```bash
+cd tiku
+python convert_all_questions_shuatidadang.py
+# 按提示输入源文件夹和目标文件夹路径
+```
+
+**依赖安装**:
+```bash
+pip install openpyxl python-docx olefile
+```
+
 ## 🔧 GitHub Actions
 
 ### 🐳 deploy-docker.yml - Docker镜像CI/CD
 **功能**: 自动构建Docker镜像并推送到Docker Hub，基于Git Tag管理版本
+
+### 🧹 Auto clean workflows.yml - 工作流日志清理
+**功能**: 每周自动清理5天前的GitHub Actions运行记录
+
+### 🔄 repo_sync.yml - 仓库同步
+**功能**: 自动从上游仓库同步代码，支持GitHub和Gitee双向同步
+
+### 📦 docker.yml - Docker多架构构建
+**功能**: 使用Docker Buildx构建多架构镜像（amd64/arm64），推送到Docker Hub
+
+## 🤖 AI上下文文档
+
+本项目包含完整的AI上下文索引文档（CLAUDE.md），用于帮助AI助手快速理解项目结构和代码逻辑。
+
+### 文档结构
+```
+Demo/
+├── CLAUDE.md                    # 根级索引（项目概览、架构图、模块索引）
+├── Sh/system/CLAUDE.md          # 系统工具模块文档
+├── Sh/network/CLAUDE.md         # 网络工具模块文档
+├── Sh/docker/CLAUDE.md          # Docker工具模块文档
+├── Sh/utils/CLAUDE.md           # 通用工具模块文档
+├── Work/CLAUDE.md               # Cloudflare Workers文档
+├── Action/CLAUDE.md             # GitHub Actions文档
+├── tiku/CLAUDE.md               # 题库转换工具文档
+└── lib/CLAUDE.md                # 公共库文档
+```
+
+### 特性
+- 📊 **Mermaid结构图**：可视化展示模块关系
+- 🔗 **导航面包屑**：支持模块间快速跳转
+- 📝 **详细接口说明**：每个脚本的参数、配置、示例
+- ❓ **FAQ**：常见问题解答
 
 ## 📖 文档
 
@@ -493,26 +599,37 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 ```
 # 使用频率统计 (仅供参考)
 statistics = {
+    # 系统工具
     'nat64_optimizer.sh': '★★★★★',
     'install-system-information.sh': '★★★★★',
     'LocaleCN.sh': '★★★★★',
     'cleanup.sh': '★★★★☆',
     'terminal_optimizer.sh': '★★★★☆',
-    'ssh_key.sh': '★★★★☆',
-    'docker-ca.sh': '★★★☆☆',
-    'backup_postgres.sh': '★★★☆☆',
     'swap.sh': '★★★☆☆',
-    'ChangeMirrors.sh': '★★★☆☆',
-    'DockerInstallation.sh': '★★★☆☆',
+    'clean_snap.sh': '★☆☆☆☆',
+
+    # 网络工具
     'all_http_socks5.sh': '★★☆☆☆',
     'install_ufw_cloudflare.sh': '★★☆☆☆',
     'dd-od.sh': '★★☆☆☆',
     'gost.sh': '★★☆☆☆',
     'http_install.sh': '★★☆☆☆',
     'block-ips.sh': '★☆☆☆☆',
-    'clean_snap.sh': '★☆☆☆☆',
+
+    # Docker工具
+    'DockerInstallation.sh': '★★★☆☆',
+    'docker-ca.sh': '★★★☆☆',
+
+    # 通用工具
+    'ssh_key.sh': '★★★★☆',
+    'backup_postgres.sh': '★★★☆☆',
+    'ChangeMirrors.sh': '★★★☆☆',
     'QLOneKeyDependency.sh': '★☆☆☆☆',
-    'Network-Reinstall-System-Modify.sh': '★☆☆☆☆'
+    'Network-Reinstall-System-Modify.sh': '★☆☆☆☆',
+
+    # 题库转换 (新增)
+    'convert_all_questions_motibang.py': '★★★☆☆',
+    'convert_all_questions_shuatidadang.py': '★★☆☆☆'
 }
 ```
 
