@@ -1,0 +1,1230 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+多格式题库转换脚本 - 磨题帮版本
+将题库文件转换为磨题帮导入格式
+
+支持输入文件格式：
+- .xlsx (Excel文件)
+- .doc (旧版WPS文档)
+- .docx (Word文档)
+
+使用方法：
+    python3 convert_all_questions_motibang.py [文件1] [文件2] ...
+
+示例：
+    # 转换默认题库文件
+    python3 convert_all_questions_motibang.py
+
+    # 转换指定文件
+    python3 convert_all_questions_motibang.py 我的题库.xlsx 另一个题库.docx
+
+    # 转换当前目录所有Excel文件
+    python3 convert_all_questions_motibang.py *.xlsx
+
+输出格式：磨题帮Excel导入模板
+输出文件：原文件名_磨题帮.xlsx
+
+磨题帮模板格式（基于template1）：
+- 题干
+- 题型（选择题/判断题/填空题）
+- 选择项1-10
+- 答案
+- 解析
+- 得分
+"""
+
+import re
+import os
+import sys
+import glob as glob_module
+import openpyxl
+from openpyxl.styles import Font
+from docx import Document
+import olefile
+
+
+# ========== 字符规范化工具 ==========
+def normalize_text(text):
+    """
+    全面的字符规范化：
+    - 全角字母 → 半角字母
+    - 全角数字 → 半角数字
+    - 全角标点 → 半角标点（部分）
+    """
+    if not text:
+        return ''
+
+    result = []
+    for char in text:
+        code = ord(char)
+        # 全角大写字母 A-Z: U+FF21 - U+FF3A
+        if 0xFF21 <= code <= 0xFF3A:
+            result.append(chr(code - 0xFF21 + ord('A')))
+        # 全角小写字母 a-z: U+FF41 - U+FF5A
+        elif 0xFF41 <= code <= 0xFF5A:
+            result.append(chr(code - 0xFF41 + ord('a')))
+        # 全角数字 0-9: U+FF10 - U+FF19
+        elif 0xFF10 <= code <= 0xFF19:
+            result.append(chr(code - 0xFF10 + ord('0')))
+        # 全角空格
+        elif code == 0x3000:
+            result.append(' ')
+        # 常用全角标点转换
+        elif char == '．':
+            result.append('.')
+        elif char == '，':
+            result.append(',')
+        elif char == '：':
+            result.append(':')
+        elif char == '；':
+            result.append(';')
+        elif char == '（':
+            result.append('(')
+        elif char == '）':
+            result.append(')')
+        else:
+            result.append(char)
+    return ''.join(result)
+
+
+def normalize_letters(text):
+    """将全角字母转换为半角字母（保留向后兼容）"""
+    return normalize_text(text)
+
+
+def normalize_judgment_answer(raw_answer):
+    """
+    统一判断题答案格式，支持多种输入格式
+    返回: '对' / '错' / '' (无法识别)
+    """
+    if not raw_answer:
+        return ''
+
+    ans = str(raw_answer).strip().upper()
+
+    # 正确答案的各种表示
+    true_values = [
+        'Y', 'YES', 'T', 'TRUE', '1',
+        '对', '正确', '√', '✓', '是', 'RIGHT', 'CORRECT',
+        '○', '〇', 'O'
+    ]
+
+    # 错误答案的各种表示
+    false_values = [
+        'N', 'NO', 'F', 'FALSE', '0',
+        '错', '错误', '×', '✗', '✘', '否', 'WRONG', 'INCORRECT',
+        'X', '☓'
+    ]
+
+    if ans in true_values:
+        return '对'
+    elif ans in false_values:
+        return '错'
+    else:
+        return ''
+
+
+def clean_answer(answer):
+    """清理答案字符串"""
+    if not answer:
+        return ''
+    answer = str(answer).strip().upper()
+    # 只保留字母
+    return ''.join(c for c in answer if c.isalpha())
+
+
+# ========== 处理 车辆检修工练习题-中级.xlsx ==========
+def parse_mid_level_excel(file_path):
+    """解析中级练习题Excel"""
+    questions = []
+    wb = openpyxl.load_workbook(file_path)
+    ws = wb.active
+
+    # 跳过表头行
+    for row_idx in range(2, ws.max_row + 1):
+        question_text = ws.cell(row=row_idx, column=2).value  # 试题内容
+        if not question_text:
+            continue
+
+        # 获取题型（列16）
+        q_type_raw = ws.cell(row=row_idx, column=16).value  # 题型列
+        q_type_raw = str(q_type_raw).strip() if q_type_raw else ''
+
+        # 获取答案（列15）
+        answer_raw = ws.cell(row=row_idx, column=15).value
+        answer_raw = str(answer_raw).strip() if answer_raw else ''
+
+        # 根据题型处理
+        if '判断' in q_type_raw:
+            # 判断题：使用统一的答案规范化
+            answer = normalize_judgment_answer(answer_raw)
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': '判断题',
+                'answer': answer,
+                'source': ''
+            })
+        else:
+            # 选择题
+            # 获取选项
+            options = {}
+            option_letters = 'ABCDEFGHIJKL'
+            for i, letter in enumerate(option_letters):
+                opt_value = ws.cell(row=row_idx, column=3+i).value
+                if opt_value and str(opt_value).strip():
+                    options[letter] = str(opt_value).strip()
+
+            answer = clean_answer(answer_raw)
+
+            # 根据答案数量判断题型
+            if len(answer) > 1:
+                q_type = '多选题'
+            else:
+                q_type = '单选题'
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': q_type,
+                'options': options,
+                'answer': answer,
+                'source': ''
+            })
+
+    return questions
+
+
+# ========== 处理 2-车辆题库汇总2024.xlsx ==========
+def parse_2024_summary_excel(file_path):
+    """解析2024题库汇总Excel"""
+    questions = []
+    wb = openpyxl.load_workbook(file_path)
+
+    # 处理选择题工作表
+    if '选择题' in wb.sheetnames:
+        ws = wb['选择题']
+        for row_idx in range(3, ws.max_row + 1):  # 从第3行开始（跳过标题行）
+            question_text = ws.cell(row=row_idx, column=3).value  # 试题内容
+            if not question_text:
+                continue
+
+            options = {}
+            for i, letter in enumerate('ABCD'):
+                opt_value = ws.cell(row=row_idx, column=4+i).value
+                if opt_value and str(opt_value).strip():
+                    # 选项可能带有字母前缀，需要去除
+                    opt_text = str(opt_value).strip()
+                    opt_text = re.sub(r'^[A-D][、.．:：]\s*', '', opt_text)
+                    if opt_text:
+                        options[letter] = opt_text
+
+            answer = clean_answer(ws.cell(row=row_idx, column=8).value)
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': '单选题',
+                'options': options,
+                'answer': answer,
+                'source': ''
+            })
+
+    # 处理多选题工作表
+    if '多选题' in wb.sheetnames:
+        ws = wb['多选题']
+        for row_idx in range(3, ws.max_row + 1):
+            question_text = ws.cell(row=row_idx, column=3).value
+            if not question_text:
+                continue
+
+            options = {}
+            for i, letter in enumerate('ABCDE'):
+                opt_value = ws.cell(row=row_idx, column=4+i).value
+                if opt_value and str(opt_value).strip():
+                    opt_text = str(opt_value).strip()
+                    opt_text = re.sub(r'^[A-E][、.．:：]\s*', '', opt_text)
+                    if opt_text:
+                        options[letter] = opt_text
+
+            answer = clean_answer(ws.cell(row=row_idx, column=9).value)
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': '多选题',
+                'options': options,
+                'answer': answer,
+                'source': ''
+            })
+
+    # 处理判断题工作表
+    if '判断题' in wb.sheetnames:
+        ws = wb['判断题']
+        for row_idx in range(3, ws.max_row + 1):
+            question_text = ws.cell(row=row_idx, column=3).value
+            if not question_text:
+                continue
+
+            raw_answer = ws.cell(row=row_idx, column=4).value
+            answer = normalize_judgment_answer(raw_answer)
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': '判断题',
+                'answer': answer,
+                'source': ''
+            })
+
+    # 处理填空题工作表
+    if '填空题' in wb.sheetnames:
+        ws = wb['填空题']
+        for row_idx in range(3, ws.max_row + 1):
+            question_text = ws.cell(row=row_idx, column=3).value
+            if not question_text:
+                continue
+
+            answer = ws.cell(row=row_idx, column=4).value or ''
+            # 填空题答案可能用顿号、逗号分隔
+            answers = re.split(r'[,，、;；]', str(answer))
+            answers = [a.strip() for a in answers if a.strip()]
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': '填空题',
+                'answers': answers,
+                'raw_answer': str(answer),
+                'source': ''
+            })
+
+    # 处理简答题工作表
+    if '简答题' in wb.sheetnames:
+        ws = wb['简答题']
+        for row_idx in range(3, ws.max_row + 1):
+            question_text = ws.cell(row=row_idx, column=3).value
+            if not question_text:
+                continue
+
+            answer = ws.cell(row=row_idx, column=4).value or ''
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': '简答题',
+                'answer': str(answer).strip(),
+                'source': ''
+            })
+
+    # 处理论述题工作表
+    if '论述题' in wb.sheetnames:
+        ws = wb['论述题']
+        for row_idx in range(3, ws.max_row + 1):
+            question_text = ws.cell(row=row_idx, column=3).value
+            if not question_text:
+                continue
+
+            answer = ws.cell(row=row_idx, column=4).value or ''
+
+            questions.append({
+                'question': str(question_text).strip(),
+                'type': '简答题',  # 论述题归类为简答题
+                'answer': str(answer).strip(),
+                'source': ''
+            })
+
+    return questions
+
+
+# ========== 处理 题库1.doc ==========
+def parse_doc_file(file_path):
+    """解析旧版WPS文档"""
+    questions = []
+
+    try:
+        ole = olefile.OleFileIO(file_path)
+        wd = ole.openstream('WordDocument').read()
+        text = wd.decode('utf-16-le', errors='ignore')
+
+        # 提取中文文本块
+        chinese_blocks = re.findall(
+            r'[\u4e00-\u9fff\uff00-\uffef\u3000-\u303f0-9A-Za-z（）()、，。？！：；√×\s\-—_]+',
+            text
+        )
+
+        # 合并文本
+        full_text = ''.join(block for block in chinese_blocks if len(block) > 3)
+
+        # 找到各部分的位置
+        judgment_start = full_text.find('判断题')
+        fill_start = full_text.find('填空题')
+        essay_start = full_text.find('简答题')
+
+        # ===== 解析选择题 =====
+        if judgment_start > 0:
+            choice_text = full_text[:judgment_start]
+        else:
+            choice_text = full_text
+
+        # 按题号分割
+        choice_splits = re.split(r'(?=\d+[、．.]\s*[^\d])', choice_text)
+
+        for chunk in choice_splits:
+            chunk = chunk.strip()
+            if not chunk or len(chunk) < 20:
+                continue
+
+            # 提取答案
+            answer_match = re.search(r'[（(]\s*([A-Da-d])\s*[)）]', chunk)
+            if not answer_match:
+                continue
+
+            answer = answer_match.group(1).upper()
+
+            # 提取题干（答案括号之前的部分，去掉题号）
+            q_text_match = re.match(r'\d*[、．.]?\s*(.+?)[（(]\s*[A-Da-d]\s*[)）]', chunk, re.DOTALL)
+            if not q_text_match:
+                continue
+
+            q_text = q_text_match.group(1).strip()
+            q_text = re.sub(r'\s+', ' ', q_text)
+
+            # 提取选项
+            options = {}
+            opt_text = chunk[answer_match.end():]
+
+            for letter in 'ABCD':
+                pattern = rf'{letter}[、．.]\s*([^A-D]+?)(?=[A-D][、．.]|$)'
+                opt_match = re.search(pattern, opt_text)
+                if opt_match:
+                    opt_content = opt_match.group(1).strip()
+                    opt_content = re.sub(r'\s+', ' ', opt_content)
+                    if opt_content and len(opt_content) < 100:
+                        options[letter] = opt_content
+
+            if q_text and len(options) >= 2 and len(q_text) > 5:
+                questions.append({
+                    'question': q_text,
+                    'type': '单选题',
+                    'options': options,
+                    'answer': answer,
+                    'source': ''
+                })
+
+        # ===== 解析判断题 =====
+        if judgment_start > 0:
+            if fill_start > judgment_start:
+                judgment_text = full_text[judgment_start:fill_start]
+            elif essay_start > judgment_start:
+                judgment_text = full_text[judgment_start:essay_start]
+            else:
+                judgment_text = full_text[judgment_start:]
+
+            # 匹配判断题: 题号、题干。（√或×）
+            judgment_pattern = r'(\d+)[、．.]\s*([^（(√×]+?)[。？！]?\s*[（(]\s*([√×])\s*[)）]'
+            judgment_matches = re.findall(judgment_pattern, judgment_text)
+
+            for match in judgment_matches:
+                q_num, q_text, raw_answer = match
+                answer = '对' if raw_answer == '√' else '错'
+                q_text = q_text.strip()
+                q_text = re.sub(r'\s+', ' ', q_text)
+                if not q_text.endswith(('。', '？', '！')):
+                    q_text += '。'
+
+                if len(q_text) > 5:
+                    questions.append({
+                        'question': q_text,
+                        'type': '判断题',
+                        'answer': answer,
+                        'source': ''
+                    })
+
+        # ===== 解析简答题 =====
+        if essay_start > 0:
+            essay_text = full_text[essay_start:]
+
+            # 匹配简答题: 题号、题干（问号结尾）
+            essay_pattern = r'(\d+)[、．.]\s*([^？?]+[？?])'
+            essay_matches = re.findall(essay_pattern, essay_text)
+
+            for match in essay_matches:
+                q_num, q_text = match
+                q_text = q_text.strip()
+                q_text = re.sub(r'\s+', ' ', q_text)
+
+                if q_text and len(q_text) > 10:
+                    questions.append({
+                        'question': q_text,
+                        'type': '简答题',
+                        'answer': '',  # 简答题答案复杂，暂不提取
+                        'source': ''
+                    })
+
+        ole.close()
+
+    except Exception as e:
+        print(f'解析doc文件出错: {e}')
+        import traceback
+        traceback.print_exc()
+
+    return questions
+
+
+# ========== 处理 CRH6集团竞赛题库.docx ==========
+def parse_fill_blank_question(text):
+    """解析填空题"""
+    match = re.match(r'^(\d+)[、.．]\s*', text)
+    if match:
+        text = text[match.end():]
+
+    answer = ''
+    question = text
+
+    answer_match = re.search(r'答案[：:]\s*[（(]([^）)]+)[）)]', text)
+    if answer_match:
+        question = text[:answer_match.start()].strip()
+        answer = answer_match.group(1).strip()
+    else:
+        answer_match2 = re.search(r'答案[：:]\s*[（(](.+?)$', text)
+        if answer_match2:
+            question = text[:answer_match2.start()].strip()
+            answer = answer_match2.group(1).strip()
+        else:
+            answer_match3 = re.search(r'答案[：:]\s*(.+?)$', text)
+            if answer_match3:
+                question = text[:answer_match3.start()].strip()
+                answer = answer_match3.group(1).strip()
+
+    question = re.sub(r'_{2,}', '____', question)
+    question = re.sub(r'\s{3,}', '____', question)
+
+    answers = re.split(r'[,，、;；]', answer)
+    answers = [a.strip() for a in answers if a.strip()]
+
+    return {
+        'question': question,
+        'type': '填空题',
+        'answers': answers,
+        'raw_answer': answer
+    }
+
+
+def parse_choice_question(text):
+    """解析选择/多选题"""
+    text = normalize_letters(text)
+
+    match = re.match(r'^(\d+)[、.．]\s*', text)
+    if match:
+        text = text[match.end():]
+
+    answer = ''
+    # 支持带逗号分隔的多选答案，如 (B,D) 或 (BD)
+    answer_match = re.search(r'答案[：:]\s*[（(]\s*([A-Za-z,，\s]+)\s*[）)]', text)
+    if answer_match:
+        # 提取答案并移除逗号、空格，只保留字母
+        raw_answer = answer_match.group(1)
+        answer = ''.join(c.upper() for c in raw_answer if c.isalpha())
+        text_for_options = text[:answer_match.start()] + text[answer_match.end():]
+    else:
+        text_for_options = text
+
+    options = {}
+    lines = text_for_options.replace('\t', '  ').split('\n')
+    all_text = ' '.join(lines)
+
+    # 改进版正则，正确处理短选项
+    option_pattern = r'([A-L])[、.．:：]\s*([^\s]+(?:\s+[^\sA-L][^\s]*)*)'
+    matches = re.findall(option_pattern, all_text)
+
+    for letter, content in matches:
+        content = content.strip()
+        content = re.sub(r'\s+$', '', content)
+        if content:
+            options[letter.upper()] = content
+
+    if len(options) < 2:
+        for part in re.split(r'\s{2,}|\t|\n', text_for_options):
+            part = part.strip()
+            opt_match = re.match(r'([A-L])[、.．:：]\s*(.+)', part)
+            if opt_match:
+                letter = opt_match.group(1).upper()
+                content = opt_match.group(2).strip()
+                if content:
+                    options[letter] = content
+
+    first_option = re.search(r'[A-L][、.．:：]', text_for_options)
+    if first_option:
+        question = text_for_options[:first_option.start()].strip()
+    else:
+        question = text_for_options.strip()
+
+    question = question.rstrip()
+    # 清理题干末尾可能残留的答案标记（支持带逗号的格式）
+    question = re.sub(r'答案[：:]\s*[（(]?[A-Za-z,，\s]*[）)]?\s*$', '', question).strip()
+    # 清理可能残留的 ",X）" 格式
+    question = re.sub(r'[,，]\s*[A-Za-z]\s*[）)]\s*$', '', question).strip()
+
+    question_type = '多选题' if len(answer) > 1 else '单选题'
+
+    return {
+        'question': question,
+        'type': question_type,
+        'options': options,
+        'answer': answer
+    }
+
+
+def parse_judgment_question(text):
+    """解析判断题"""
+    match = re.match(r'^(\d+)[、.．]\s*', text)
+    if match:
+        text = text[match.end():]
+
+    answer_match = re.search(r'答案[：:]\s*[（(]([√×对错]|正确|错误)[）)]', text)
+    if answer_match:
+        raw_answer = answer_match.group(1).strip()
+        question = text[:answer_match.start()].strip()
+
+        if raw_answer in ['√', '对', '正确']:
+            answer = '对'
+        else:
+            answer = '错'
+    else:
+        question = text.strip()
+        answer = ''
+
+    return {
+        'question': question,
+        'type': '判断题',
+        'answer': answer
+    }
+
+
+def parse_essay_question(text):
+    """解析简答题"""
+    match = re.match(r'^(\d+)[、.．]\s*', text)
+    if match:
+        text = text[match.end():]
+
+    question = ''
+    answer = ''
+
+    lines = text.strip().split('\n')
+
+    if len(lines) >= 2:
+        question_lines = []
+        answer_start = 0
+        for i, line in enumerate(lines):
+            question_lines.append(line)
+            if '？' in line or '?' in line:
+                answer_start = i + 1
+                break
+
+        if answer_start > 0 and answer_start < len(lines):
+            question = '\n'.join(question_lines).strip()
+            answer = '\n'.join(lines[answer_start:]).strip()
+        else:
+            question_end = -1
+            for i, char in enumerate(text):
+                if char in '？?':
+                    question_end = i + 1
+                    break
+
+            if question_end > 0:
+                question = text[:question_end].strip()
+                answer = text[question_end:].strip()
+            else:
+                question = lines[0].strip()
+                answer = '\n'.join(lines[1:]).strip() if len(lines) > 1 else ''
+    else:
+        question_end = -1
+        for i, char in enumerate(text):
+            if char in '？?':
+                question_end = i + 1
+                break
+
+        if question_end > 0 and question_end < len(text):
+            question = text[:question_end].strip()
+            answer = text[question_end:].strip()
+        else:
+            question = text.strip()
+            answer = ''
+
+    return {
+        'question': question,
+        'type': '简答题',
+        'answer': answer
+    }
+
+
+def parse_crh6_docx(file_path):
+    """解析CRH6集团竞赛题库.docx"""
+    questions = []
+    doc = Document(file_path)
+
+    # 处理表格0 - 填空题和选择题
+    if len(doc.tables) > 0:
+        table0 = doc.tables[0]
+        for row in table0.rows:
+            text = row.cells[0].text.strip()
+            if not text:
+                continue
+
+            has_option = any(marker in text for marker in ['A、', 'A.', 'A．', 'A：', 'A:', '\nA', '\tA'])
+
+            if has_option:
+                q = parse_choice_question(text)
+            else:
+                q = parse_fill_blank_question(text)
+
+            questions.append(q)
+
+    # 处理表格1 - 判断题
+    if len(doc.tables) > 1:
+        table1 = doc.tables[1]
+        for row in table1.rows:
+            text = row.cells[0].text.strip()
+            if not text:
+                continue
+
+            q = parse_judgment_question(text)
+            questions.append(q)
+
+    # 处理表格2 - 简答题
+    if len(doc.tables) > 2:
+        table2 = doc.tables[2]
+        for row in table2.rows:
+            text = row.cells[0].text.strip()
+            if not text:
+                continue
+
+            q = parse_essay_question(text)
+            questions.append(q)
+
+    return questions
+
+
+# ========== 通用纯文本解析器 ==========
+def detect_encoding(file_path):
+    """检测文本文件编码"""
+    encodings = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'utf-16', 'big5']
+    for enc in encodings:
+        try:
+            with open(file_path, 'r', encoding=enc) as f:
+                f.read()
+            return enc
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return 'utf-8'
+
+
+def parse_text_question(text):
+    """
+    智能解析单个题目文本，自动检测题型
+    支持格式:
+    - 选择题: 带A、B、C、D选项
+    - 判断题: 答案为√/×/对/错/T/F等
+    - 填空题: 带____或空格占位符
+    - 简答题: 其他
+    """
+    text = normalize_text(text.strip())
+    if not text or len(text) < 5:
+        return None
+
+    # 去除题号
+    text = re.sub(r'^\d+[、.．:：\s]+', '', text)
+
+    # 检测是否有选项标志 → 选择题
+    has_options = bool(re.search(r'[A-L][、.．:：]\s*\S', text))
+
+    if has_options:
+        return parse_choice_question(text)
+
+    # 检测是否有判断题答案标志
+    judgment_pattern = r'答案[：:]\s*[（(]?\s*([√×对错TFYNtfyn]|正确|错误|TRUE|FALSE|Yes|No)\s*[）)]?'
+    judgment_match = re.search(judgment_pattern, text, re.IGNORECASE)
+    if judgment_match:
+        question = text[:judgment_match.start()].strip()
+        answer = normalize_judgment_answer(judgment_match.group(1))
+        return {
+            'question': question,
+            'type': '判断题',
+            'answer': answer
+        }
+
+    # 检测是否有填空标志
+    has_blank = bool(re.search(r'_{2,}|（\s*）|\(\s*\)|【\s*】', text))
+    if has_blank:
+        return parse_fill_blank_question(text)
+
+    # 检测是否有问号 → 可能是简答题
+    if '？' in text or '?' in text:
+        return parse_essay_question(text)
+
+    # 默认作为简答题处理
+    return {
+        'question': text,
+        'type': '简答题',
+        'answer': ''
+    }
+
+
+def parse_text_file(file_path):
+    """
+    解析纯文本文件（.txt）
+    支持多种题目分隔格式:
+    - 数字编号: 1. / 1、/ 1) / (1)
+    - 空行分隔
+    - 特殊标记: 【题目】等
+    """
+    questions = []
+
+    encoding = detect_encoding(file_path)
+    try:
+        with open(file_path, 'r', encoding=encoding) as f:
+            content = f.read()
+    except Exception as e:
+        print(f'读取文本文件出错: {e}')
+        return questions
+
+    # 规范化内容
+    content = normalize_text(content)
+
+    # 尝试按题号分割
+    # 匹配: 1. / 1、/ 1) / (1) / 【1】等格式
+    split_pattern = r'\n\s*(?=\d+[、.．:：\)\)]\s|\(\d+\)|\【\d+\】)'
+    chunks = re.split(split_pattern, content)
+
+    if len(chunks) < 2:
+        # 如果按题号分割效果不好，尝试按空行分割
+        chunks = re.split(r'\n\s*\n+', content)
+
+    for chunk in chunks:
+        chunk = chunk.strip()
+        if not chunk or len(chunk) < 10:
+            continue
+
+        q = parse_text_question(chunk)
+        if q and q.get('question'):
+            questions.append(q)
+
+    return questions
+
+
+def parse_generic_excel(file_path):
+    """
+    通用Excel解析器
+    尝试自动检测Excel文件结构并解析题目
+    """
+    questions = []
+
+    try:
+        wb = openpyxl.load_workbook(file_path)
+    except Exception as e:
+        print(f'读取Excel文件出错: {e}')
+        return questions
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+
+        # 跳过空表
+        if ws.max_row < 2:
+            continue
+
+        # 尝试检测表头行
+        header_row = 1
+        for row_idx in range(1, min(5, ws.max_row + 1)):
+            cell_val = ws.cell(row=row_idx, column=1).value
+            if cell_val and ('题' in str(cell_val) or '问题' in str(cell_val)):
+                header_row = row_idx
+                break
+
+        # 遍历数据行
+        for row_idx in range(header_row + 1, ws.max_row + 1):
+            # 尝试从第一列或第二列获取题干
+            question_text = None
+            for col in [1, 2, 3]:
+                val = ws.cell(row=row_idx, column=col).value
+                if val and len(str(val).strip()) > 5:
+                    question_text = str(val).strip()
+                    break
+
+            if not question_text:
+                continue
+
+            # 尝试组合所有单元格内容
+            row_content = []
+            for col in range(1, min(ws.max_column + 1, 20)):
+                val = ws.cell(row=row_idx, column=col).value
+                if val:
+                    row_content.append(str(val).strip())
+
+            full_text = ' '.join(row_content)
+            q = parse_text_question(full_text)
+            if q and q.get('question'):
+                questions.append(q)
+
+    return questions
+
+
+def parse_generic_docx(file_path):
+    """
+    通用Word文档解析器
+    尝试解析各种格式的docx文件
+    """
+    questions = []
+
+    try:
+        doc = Document(file_path)
+    except Exception as e:
+        print(f'读取Word文档出错: {e}')
+        return questions
+
+    # 首先尝试从表格中提取
+    for table in doc.tables:
+        for row in table.rows:
+            text = ''
+            for cell in row.cells:
+                cell_text = cell.text.strip()
+                if cell_text:
+                    text += cell_text + ' '
+            text = text.strip()
+            if text and len(text) > 10:
+                q = parse_text_question(text)
+                if q and q.get('question'):
+                    questions.append(q)
+
+    # 如果表格没有内容，从段落中提取
+    if not questions:
+        all_text = []
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if text:
+                all_text.append(text)
+
+        full_content = '\n'.join(all_text)
+
+        # 按题号分割
+        chunks = re.split(r'\n\s*(?=\d+[、.．:：\)\)]\s)', full_content)
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if chunk and len(chunk) > 10:
+                q = parse_text_question(chunk)
+                if q and q.get('question'):
+                    questions.append(q)
+
+    return questions
+
+
+def get_parser_for_file(file_path):
+    """
+    根据文件扩展名返回合适的解析器
+    优先返回特定解析器，否则返回通用解析器
+    """
+    ext = os.path.splitext(file_path)[1].lower()
+    base_name = os.path.basename(file_path).lower()
+
+    # 特定文件使用特定解析器
+    if '中级' in base_name and ext == '.xlsx':
+        return parse_mid_level_excel
+    elif '2024' in base_name and '汇总' in base_name and ext == '.xlsx':
+        return parse_2024_summary_excel
+    elif 'crh6' in base_name and ext == '.docx':
+        return parse_crh6_docx
+    elif ext == '.doc':
+        return parse_doc_file
+
+    # 通用解析器
+    if ext == '.xlsx':
+        return parse_generic_excel
+    elif ext == '.docx':
+        return parse_generic_docx
+    elif ext == '.txt':
+        return parse_text_file
+    elif ext == '.doc':
+        return parse_doc_file
+
+    return None
+
+
+# ========== 生成磨题帮Excel输出 ==========
+def convert_to_motibang_excel(questions, output_path):
+    """将题目转换为磨题帮Excel格式"""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '题库'
+
+    # 磨题帮表头（基于template1格式）
+    headers = ['题干', '题型', '选择项1', '选择项2', '选择项3', '选择项4', '选择项5',
+               '选择项6', '选择项7', '选择项8', '选择项9', '选择项10', '答案', '解析', '得分']
+
+    # 添加表头
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True)
+
+    # 添加题目数据
+    for row_idx, q in enumerate(questions, 2):
+        q_type = q.get('type', '')
+
+        # 题干
+        ws.cell(row=row_idx, column=1, value=q.get('question', ''))
+
+        # 题型转换为磨题帮格式
+        if q_type in ['单选题', '多选题']:
+            ws.cell(row=row_idx, column=2, value='选择题')
+        elif q_type == '判断题':
+            ws.cell(row=row_idx, column=2, value='判断题')
+        elif q_type in ['填空题', '定序填空题', '不定序填空题']:
+            ws.cell(row=row_idx, column=2, value='填空题')
+        elif q_type == '简答题':
+            ws.cell(row=row_idx, column=2, value='简答题')
+        else:
+            ws.cell(row=row_idx, column=2, value=q_type)
+
+        if q_type in ['单选题', '多选题']:
+            # 选择题选项
+            options = q.get('options', {})
+            sorted_options = sorted([(k, v) for k, v in options.items() if v], key=lambda x: x[0])
+
+            # 写入选项（从列3开始）
+            for i, (_, content) in enumerate(sorted_options[:10]):
+                ws.cell(row=row_idx, column=3+i, value=content)
+
+            # 答案映射
+            original_answer = q.get('answer', '')
+            if original_answer:
+                old_letters = [k for k, _ in sorted_options]
+                option_letters = 'ABCDEFGHIJ'
+                old_to_new = {}
+                for i, old_letter in enumerate(old_letters):
+                    if i < len(option_letters):
+                        old_to_new[old_letter] = option_letters[i]
+
+                new_answer = ''
+                for char in original_answer:
+                    if char in old_to_new:
+                        new_answer += old_to_new[char]
+                    elif char.upper() in old_to_new:
+                        new_answer += old_to_new[char.upper()]
+
+                ws.cell(row=row_idx, column=13, value=new_answer if new_answer else original_answer)
+
+        elif q_type == '判断题':
+            # 判断题答案直接写入
+            ws.cell(row=row_idx, column=13, value=q.get('answer', ''))
+
+        elif q_type in ['填空题', '定序填空题']:
+            # 填空题：答案用||分隔
+            answers = q.get('answers', [])
+            raw_answer = q.get('raw_answer', '')
+            if answers:
+                ws.cell(row=row_idx, column=13, value='||'.join(answers))
+            elif raw_answer:
+                # 将各种分隔符统一为||
+                unified = re.sub(r'[,，、;；]', '||', raw_answer)
+                ws.cell(row=row_idx, column=13, value=unified)
+
+        elif q_type == '简答题':
+            # 简答题答案
+            ws.cell(row=row_idx, column=13, value=q.get('answer', ''))
+
+    # 调整列宽
+    ws.column_dimensions['A'].width = 60  # 题干
+    ws.column_dimensions['B'].width = 10  # 题型
+    for i, col in enumerate('CDEFGHIJKL'):
+        ws.column_dimensions[col].width = 15  # 选项
+    ws.column_dimensions['M'].width = 15  # 答案
+    ws.column_dimensions['N'].width = 30  # 解析
+    ws.column_dimensions['O'].width = 8   # 得分
+
+    wb.save(output_path)
+    print(f'已保存到: {output_path}')
+    return len(questions)
+
+
+def print_statistics(questions, title):
+    """打印题目统计信息"""
+    type_count = {}
+    for q in questions:
+        t = q.get('type', '未知')
+        type_count[t] = type_count.get(t, 0) + 1
+
+    print(f'\n{title} 题型统计:')
+    for t, c in sorted(type_count.items()):
+        print(f'  - {t}: {c}')
+
+
+def get_file_base_name(file_path):
+    """获取文件基础名称（不含扩展名）"""
+    return os.path.splitext(os.path.basename(file_path))[0]
+
+
+def process_file(file_path, parser_func, base_path, suffix='_磨题帮'):
+    """
+    通用文件处理函数
+    返回: (questions, output_file) 或 (None, None) 如果文件不存在
+    """
+    if not os.path.exists(file_path):
+        return None, None
+
+    file_name = os.path.basename(file_path)
+    base_name = get_file_base_name(file_path)
+
+    print('\n' + '-' * 40)
+    print(f'处理 {file_name}...')
+
+    questions = parser_func(file_path)
+
+    # 强制使用文件基础名作为source（覆盖解析函数中的硬编码值）
+    for q in questions:
+        q['source'] = base_name
+
+    print(f'  解析到 {len(questions)} 道题目')
+    print_statistics(questions, base_name)
+
+    output_name = f'{base_name}{suffix}.xlsx'
+    output_path = os.path.join(base_path, output_name)
+    convert_to_motibang_excel(questions, output_path)
+
+    return questions, output_name
+
+
+def print_help():
+    """打印帮助信息"""
+    help_text = """
+多格式题库转换工具 - 磨题帮版本
+
+使用方法:
+    python3 convert_all_questions_motibang.py [选项] [文件1] [文件2] ...
+
+选项:
+    -h, --help     显示帮助信息
+    -o, --output   指定输出目录（默认为文件所在目录）
+
+支持的文件格式:
+    .xlsx   Excel文件
+    .docx   Word文档
+    .doc    旧版WPS/Word文档
+    .txt    纯文本文件
+
+示例:
+    # 转换默认题库文件
+    python3 convert_all_questions_motibang.py
+
+    # 转换指定文件
+    python3 convert_all_questions_motibang.py 我的题库.xlsx 另一个题库.docx
+
+    # 转换当前目录所有Excel文件
+    python3 convert_all_questions_motibang.py *.xlsx
+
+    # 指定输出目录
+    python3 convert_all_questions_motibang.py -o /path/to/output 题库.xlsx
+
+输出: 原文件名_磨题帮.xlsx
+"""
+    print(help_text)
+
+
+def main():
+    """主函数，支持命令行参数"""
+    total_questions = 0
+    generated_files = []
+    output_dir = None
+    files_to_process = []
+
+    # 解析命令行参数
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg in ['-h', '--help']:
+            print_help()
+            return
+        elif arg in ['-o', '--output']:
+            if i + 1 < len(args):
+                output_dir = args[i + 1]
+                i += 2
+                continue
+            else:
+                print('错误: -o/--output 需要指定输出目录')
+                return
+        else:
+            # 支持通配符展开
+            if '*' in arg or '?' in arg:
+                expanded = glob_module.glob(arg)
+                files_to_process.extend(expanded)
+            else:
+                files_to_process.append(arg)
+        i += 1
+
+    print('=' * 60)
+    print('多格式题库转换工具 - 磨题帮版本')
+    print('=' * 60)
+
+    # 如果没有指定文件，使用默认配置
+    if not files_to_process:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        print(f'未指定文件，使用默认题库文件（目录: {base_path}）')
+
+        # 默认处理的文件及其解析函数
+        default_files = [
+            ('车辆检修工练习题-中级.xlsx', parse_mid_level_excel),
+            ('2-车辆题库汇总2024.xlsx', parse_2024_summary_excel),
+            ('题库1.doc', parse_doc_file),
+            ('CRH6集团竞赛题库.docx', parse_crh6_docx),
+        ]
+
+        for file_name, parser_func in default_files:
+            file_path = os.path.join(base_path, file_name)
+            if os.path.exists(file_path):
+                out_dir = output_dir if output_dir else base_path
+                questions, output_name = process_file(file_path, parser_func, out_dir)
+                if questions:
+                    generated_files.append(output_name)
+                    total_questions += len(questions)
+    else:
+        # 处理命令行指定的文件
+        print(f'待处理文件: {len(files_to_process)} 个')
+
+        for file_path in files_to_process:
+            # 检查文件是否存在
+            if not os.path.exists(file_path):
+                print(f'警告: 文件不存在，跳过 - {file_path}')
+                continue
+
+            # 检查文件扩展名
+            ext = os.path.splitext(file_path)[1].lower()
+            supported_exts = ['.xlsx', '.docx', '.doc', '.txt']
+            if ext not in supported_exts:
+                print(f'警告: 不支持的文件格式，跳过 - {file_path}')
+                continue
+
+            # 获取解析器
+            parser_func = get_parser_for_file(file_path)
+            if not parser_func:
+                print(f'警告: 无法找到合适的解析器，跳过 - {file_path}')
+                continue
+
+            # 确定输出目录
+            out_dir = output_dir if output_dir else os.path.dirname(os.path.abspath(file_path))
+            if not out_dir:
+                out_dir = '.'
+
+            # 处理文件
+            questions, output_name = process_file(file_path, parser_func, out_dir)
+            if questions:
+                generated_files.append(output_name)
+                total_questions += len(questions)
+
+    # 总结
+    print('\n' + '=' * 60)
+    print(f'转换完成！共处理 {total_questions} 道题目')
+    if generated_files:
+        print('生成的磨题帮导入文件:')
+        for f in generated_files:
+            print(f'  - {f}')
+    else:
+        print('未找到可处理的题库文件！')
+    print('=' * 60)
+
+
+if __name__ == '__main__':
+    main()

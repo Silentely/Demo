@@ -26,3 +26,5 @@ stats-*.json
 *.njsproj
 *.sln
 *.sw?
+.claude
+.codex
