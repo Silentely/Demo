@@ -13,11 +13,11 @@
     python3 convert_all_questions_shuatidadang.py [文件1] [文件2] ...
 
 示例：
-    # 转换默认题库文件
-    python3 convert_all_questions_shuatidadang.py
+    # 转换单个文件
+    python3 convert_all_questions_shuatidadang.py 我的题库.xlsx
 
-    # 转换指定文件
-    python3 convert_all_questions_shuatidadang.py 我的题库.xlsx 另一个题库.docx
+    # 转换多个文件
+    python3 convert_all_questions_shuatidadang.py 题库1.xlsx 题库2.docx
 
     # 转换当前目录所有Excel文件
     python3 convert_all_questions_shuatidadang.py *.xlsx
@@ -30,10 +30,15 @@ import re
 import os
 import sys
 import glob as glob_module
+import argparse
 import openpyxl
 from openpyxl.styles import Font
 from docx import Document
 import olefile
+
+# 版本信息
+__version__ = '1.1.0'
+__description__ = '多格式题库转换工具 - 刷题搭档版本'
 
 
 # ========== 字符规范化工具 ==========
@@ -698,13 +703,29 @@ def parse_crh6_docx(file_path):
 
 
 # ========== 通用纯文本解析器 ==========
-def detect_encoding(file_path):
-    """检测文本文件编码"""
+def detect_encoding(file_path, sample_size=8192):
+    """
+    检测文本文件编码（优化版：只读取文件头部）
+
+    Args:
+        file_path: 文件路径
+        sample_size: 采样字节数，默认8KB足够检测大多数编码
+
+    Returns:
+        检测到的编码名称
+    """
     encodings = ['utf-8', 'gbk', 'gb2312', 'gb18030', 'utf-16', 'big5']
+
+    # 读取文件头部用于编码检测
+    try:
+        with open(file_path, 'rb') as f:
+            raw_data = f.read(sample_size)
+    except IOError:
+        return 'utf-8'
+
     for enc in encodings:
         try:
-            with open(file_path, 'r', encoding=enc) as f:
-                f.read()
+            raw_data.decode(enc)
             return enc
         except (UnicodeDecodeError, UnicodeError):
             continue
@@ -1057,18 +1078,153 @@ def print_statistics(questions, title):
         print(f'  - {t}: {c}')
 
 
+def validate_question(q, idx=0):
+    """
+    验证单个题目的完整性和有效性
+
+    Args:
+        q: 题目字典
+        idx: 题目序号（用于输出）
+
+    Returns:
+        (是否有效, 警告列表)
+    """
+    warnings = []
+    q_type = q.get('type', '')
+
+    # 题干验证
+    question_text = q.get('question', '').strip()
+    if not question_text:
+        return False, ['题干为空']
+    if len(question_text) < 5:
+        warnings.append('题干过短（<5字符）')
+
+    # 选择题验证
+    if q_type in ['单选题', '多选题']:
+        options = q.get('options', {})
+        if len(options) < 2:
+            warnings.append(f'选项不足（仅{len(options)}个）')
+
+        answer = q.get('answer', '')
+        if not answer:
+            warnings.append('答案为空')
+        else:
+            for char in answer:
+                if char not in options:
+                    warnings.append(f'答案"{char}"不在选项中')
+                    break
+
+    # 判断题验证
+    elif q_type == '判断题':
+        answer = q.get('answer', '')
+        if answer and answer not in ['对', '错']:
+            warnings.append(f'判断题答案格式异常: {answer}')
+
+    # 填空题验证
+    elif q_type in ['定序填空题', '不定序填空题', '填空题']:
+        answers = q.get('answers', [])
+        raw_answer = q.get('raw_answer', '')
+        if not answers and not raw_answer:
+            warnings.append('填空题答案为空')
+
+    return True, warnings
+
+
+def validate_questions(questions, verbose=False):
+    """
+    批量验证题目，返回验证统计
+
+    Args:
+        questions: 题目列表
+        verbose: 是否输出每个警告
+
+    Returns:
+        (有效题目数, 警告总数, 警告详情列表)
+    """
+    valid_count = 0
+    total_warnings = 0
+    warning_details = []
+
+    for idx, q in enumerate(questions, 1):
+        valid, warnings = validate_question(q, idx)
+        if valid:
+            valid_count += 1
+        if warnings:
+            total_warnings += len(warnings)
+            warning_details.append((idx, q.get('question', '')[:30], warnings))
+            if verbose:
+                for w in warnings:
+                    print(f'  ⚠ 第{idx}题: {w}')
+
+    return valid_count, total_warnings, warning_details
+
+
+def deduplicate_questions(questions):
+    """
+    题目去重：基于题干+选项+答案综合判断，保留第一次出现的题目
+    注意：题干相同但选项或答案不同的视为不同题目
+    返回: (去重后的题目列表, 移除的重复数量)
+    """
+    seen = set()
+    unique_questions = []
+    duplicates_removed = 0
+
+    for q in questions:
+        # 构建唯一标识：题干 + 选项内容 + 答案
+        question_text = q.get('question', '').strip()
+        if not question_text:
+            continue
+
+        # 选择题：包含选项内容
+        options = q.get('options', {})
+        if options:
+            # 按字母顺序拼接选项内容
+            options_str = '|'.join(f"{k}:{v}" for k, v in sorted(options.items()))
+        else:
+            options_str = ''
+
+        # 获取答案（选择题/判断题用answer，填空题用answers）
+        answer = q.get('answer', '')
+        answers = q.get('answers', [])
+        if answers:
+            answer_str = '||'.join(answers)
+        else:
+            answer_str = str(answer)
+
+        # 组合唯一键
+        unique_key = f"{question_text}###{options_str}###{answer_str}"
+
+        if unique_key not in seen:
+            seen.add(unique_key)
+            unique_questions.append(q)
+        else:
+            duplicates_removed += 1
+
+    return unique_questions, duplicates_removed
+
+
 def get_file_base_name(file_path):
     """获取文件基础名称（不含扩展名）"""
     return os.path.splitext(os.path.basename(file_path))[0]
 
 
-def process_file(file_path, parser_func, base_path, suffix='_刷题搭档'):
+def process_file(file_path, parser_func, base_path, suffix='_刷题搭档', verbose=False, dry_run=False):
     """
     通用文件处理函数
-    返回: (questions, output_file) 或 (None, None) 如果文件不存在
+
+    Args:
+        file_path: 输入文件路径
+        parser_func: 解析器函数
+        base_path: 输出目录
+        suffix: 输出文件后缀
+        verbose: 是否显示详细信息（包括验证警告）
+        dry_run: 仅解析验证，不输出文件
+
+    Returns:
+        (questions, output_file, warnings_count) 或 (None, None, 0) 如果失败
     """
     if not os.path.exists(file_path):
-        return None, None
+        return None, None, 0
 
     file_name = os.path.basename(file_path)
     base_name = get_file_base_name(file_path)
@@ -1076,158 +1232,202 @@ def process_file(file_path, parser_func, base_path, suffix='_刷题搭档'):
     print('\n' + '-' * 40)
     print(f'处理 {file_name}...')
 
-    questions = parser_func(file_path)
+    # 解析文件（带异常处理）
+    try:
+        questions = parser_func(file_path)
+    except Exception as e:
+        print(f'  ✗ 解析失败: {e}')
+        return None, None, 0
 
-    # 强制使用文件基础名作为source（覆盖解析函数中的硬编码值）
+    if not questions:
+        print(f'  ✗ 未解析到任何题目')
+        return None, None, 0
+
+    # 强制使用文件基础名作为source
     for q in questions:
         q['source'] = base_name
 
     print(f'  解析到 {len(questions)} 道题目')
+
+    # 验证题目
+    valid_count, warnings_count, warning_details = validate_questions(questions, verbose=verbose)
+    if warnings_count > 0:
+        print(f'  ⚠ 发现 {warnings_count} 个数据质量警告')
+        if verbose and warning_details:
+            for idx, q_text, warns in warning_details[:10]:  # 最多显示10个
+                print(f'    第{idx}题 "{q_text}...": {", ".join(warns)}')
+            if len(warning_details) > 10:
+                print(f'    ... 还有 {len(warning_details) - 10} 个警告')
+
+    # 去重处理
+    questions, duplicates_removed = deduplicate_questions(questions)
+    if duplicates_removed > 0:
+        print(f'  去除重复题目: {duplicates_removed} 道，剩余 {len(questions)} 道')
+
     print_statistics(questions, base_name)
+
+    # 如果是 dry-run 模式，不输出文件
+    if dry_run:
+        print(f'  [dry-run] 跳过文件输出')
+        return questions, None, warnings_count
 
     output_name = f'{base_name}{suffix}.xlsx'
     output_path = os.path.join(base_path, output_name)
     convert_to_excel(questions, output_path)
 
-    return questions, output_name
+    return questions, output_name, warnings_count
 
 
-def print_help():
-    """打印帮助信息"""
-    help_text = """
-多格式题库转换工具 - 刷题搭档版本
-
-使用方法:
-    python3 convert_all_questions_shuatidadang.py [选项] [文件1] [文件2] ...
-
-选项:
-    -h, --help     显示帮助信息
-    -o, --output   指定输出目录（默认为文件所在目录）
-
-支持的文件格式:
-    .xlsx   Excel文件
-    .docx   Word文档
-    .doc    旧版WPS/Word文档
-    .txt    纯文本文件
-
+def create_argument_parser():
+    """创建命令行参数解析器"""
+    parser = argparse.ArgumentParser(
+        prog='convert_all_questions_shuatidadang.py',
+        description=__description__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
 示例:
-    # 转换默认题库文件
-    python3 convert_all_questions_shuatidadang.py
+    # 转换单个文件
+    python3 %(prog)s 我的题库.xlsx
 
-    # 转换指定文件
-    python3 convert_all_questions_shuatidadang.py 我的题库.xlsx 另一个题库.docx
+    # 转换多个文件
+    python3 %(prog)s 题库1.xlsx 题库2.docx
 
     # 转换当前目录所有Excel文件
-    python3 convert_all_questions_shuatidadang.py *.xlsx
+    python3 %(prog)s *.xlsx
 
     # 指定输出目录
-    python3 convert_all_questions_shuatidadang.py -o /path/to/output 题库.xlsx
+    python3 %(prog)s -o /path/to/output 题库.xlsx
 
+    # 详细模式（显示验证警告）
+    python3 %(prog)s -v 题库.xlsx
+
+    # 仅验证不输出文件
+    python3 %(prog)s --dry-run 题库.xlsx
+
+支持的文件格式: .xlsx, .docx, .doc, .txt
 输出: 原文件名_刷题搭档.xlsx
 """
-    print(help_text)
+    )
+    parser.add_argument('files', nargs='*', metavar='文件',
+                        help='要转换的题库文件（支持通配符）')
+    parser.add_argument('-o', '--output', metavar='目录',
+                        help='指定输出目录（默认为文件所在目录）')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='详细模式，显示验证警告信息')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='仅解析验证，不输出文件')
+    parser.add_argument('--version', action='version',
+                        version=f'%(prog)s {__version__}')
+    return parser
 
 
 def main():
     """主函数，支持命令行参数"""
-    total_questions = 0
-    generated_files = []
-    output_dir = None
-    files_to_process = []
-
     # 解析命令行参数
-    args = sys.argv[1:]
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg in ['-h', '--help']:
-            print_help()
-            return
-        elif arg in ['-o', '--output']:
-            if i + 1 < len(args):
-                output_dir = args[i + 1]
-                i += 2
-                continue
-            else:
-                print('错误: -o/--output 需要指定输出目录')
-                return
+    parser = create_argument_parser()
+    args = parser.parse_args()
+
+    # 展开通配符
+    files_to_process = []
+    for pattern in args.files:
+        if '*' in pattern or '?' in pattern:
+            expanded = glob_module.glob(pattern)
+            files_to_process.extend(expanded)
         else:
-            # 支持通配符展开
-            if '*' in arg or '?' in arg:
-                expanded = glob_module.glob(arg)
-                files_to_process.extend(expanded)
-            else:
-                files_to_process.append(arg)
-        i += 1
+            files_to_process.append(pattern)
 
     print('=' * 60)
-    print('多格式题库转换工具 - 刷题搭档版本')
+    print(f'{__description__} v{__version__}')
     print('=' * 60)
 
-    # 如果没有指定文件，使用默认配置
+    # 如果没有指定文件，显示帮助信息并退出
     if not files_to_process:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        print(f'未指定文件，使用默认题库文件（目录: {base_path}）')
+        print('错误: 未指定要转换的题库文件！\n')
+        parser.print_help()
+        return
 
-        # 默认处理的文件及其解析函数
-        default_files = [
-            ('车辆检修工练习题-中级.xlsx', parse_mid_level_excel),
-            ('2-车辆题库汇总2024.xlsx', parse_2024_summary_excel),
-            ('题库1.doc', parse_doc_file),
-            ('CRH6集团竞赛题库.docx', parse_crh6_docx),
-        ]
+    # 统计变量
+    total_questions = 0
+    total_warnings = 0
+    generated_files = []
+    failed_files = []
+    skipped_files = []
 
-        for file_name, parser_func in default_files:
-            file_path = os.path.join(base_path, file_name)
-            if os.path.exists(file_path):
-                out_dir = output_dir if output_dir else base_path
-                questions, output_name = process_file(file_path, parser_func, out_dir)
-                if questions:
-                    generated_files.append(output_name)
-                    total_questions += len(questions)
-    else:
-        # 处理命令行指定的文件
-        print(f'待处理文件: {len(files_to_process)} 个')
+    # 处理命令行指定的文件
+    print(f'待处理文件: {len(files_to_process)} 个')
+    if args.verbose:
+        print(f'模式: {"仅验证" if args.dry_run else "转换输出"}')
 
-        for file_path in files_to_process:
-            # 检查文件是否存在
-            if not os.path.exists(file_path):
-                print(f'警告: 文件不存在，跳过 - {file_path}')
-                continue
+    for file_path in files_to_process:
+        # 检查文件是否存在
+        if not os.path.exists(file_path):
+            print(f'警告: 文件不存在，跳过 - {file_path}')
+            skipped_files.append((file_path, '文件不存在'))
+            continue
 
-            # 检查文件扩展名
-            ext = os.path.splitext(file_path)[1].lower()
-            supported_exts = ['.xlsx', '.docx', '.doc', '.txt']
-            if ext not in supported_exts:
-                print(f'警告: 不支持的文件格式，跳过 - {file_path}')
-                continue
+        # 检查文件扩展名
+        ext = os.path.splitext(file_path)[1].lower()
+        supported_exts = ['.xlsx', '.docx', '.doc', '.txt']
+        if ext not in supported_exts:
+            print(f'警告: 不支持的文件格式，跳过 - {file_path}')
+            skipped_files.append((file_path, '不支持的格式'))
+            continue
 
-            # 获取解析器
-            parser_func = get_parser_for_file(file_path)
-            if not parser_func:
-                print(f'警告: 无法找到合适的解析器，跳过 - {file_path}')
-                continue
+        # 获取解析器
+        parser_func = get_parser_for_file(file_path)
+        if not parser_func:
+            print(f'警告: 无法找到合适的解析器，跳过 - {file_path}')
+            skipped_files.append((file_path, '无合适解析器'))
+            continue
 
-            # 确定输出目录
-            out_dir = output_dir if output_dir else os.path.dirname(os.path.abspath(file_path))
-            if not out_dir:
-                out_dir = '.'
+        # 确定输出目录
+        out_dir = args.output if args.output else os.path.dirname(os.path.abspath(file_path))
+        if not out_dir:
+            out_dir = '.'
 
-            # 处理文件
-            questions, output_name = process_file(file_path, parser_func, out_dir)
-            if questions:
+        # 处理文件
+        questions, output_name, warnings_count = process_file(
+            file_path, parser_func, out_dir,
+            verbose=args.verbose, dry_run=args.dry_run
+        )
+
+        if questions:
+            if output_name:
                 generated_files.append(output_name)
-                total_questions += len(questions)
+            total_questions += len(questions)
+            total_warnings += warnings_count
+        else:
+            failed_files.append((file_path, '解析失败或无题目'))
 
-    # 总结
+    # 总结报告
     print('\n' + '=' * 60)
-    print(f'转换完成！共处理 {total_questions} 道题目')
+    print('转换报告')
+    print('=' * 60)
+    print(f'处理题目总数: {total_questions} 道')
+
     if generated_files:
-        print('生成的刷题搭档导入文件:')
+        print(f'\n✓ 成功生成文件 ({len(generated_files)} 个):')
         for f in generated_files:
             print(f'  - {f}')
-    else:
-        print('未找到可处理的题库文件！')
+
+    if total_warnings > 0:
+        print(f'\n⚠ 数据质量警告: {total_warnings} 个')
+        if not args.verbose:
+            print('  (使用 -v 参数查看详细警告信息)')
+
+    if failed_files:
+        print(f'\n✗ 处理失败 ({len(failed_files)} 个):')
+        for f, reason in failed_files:
+            print(f'  - {f}: {reason}')
+
+    if skipped_files:
+        print(f'\n○ 已跳过 ({len(skipped_files)} 个):')
+        for f, reason in skipped_files:
+            print(f'  - {f}: {reason}')
+
+    if not generated_files and not args.dry_run:
+        print('\n未生成任何文件！')
+
     print('=' * 60)
 
 

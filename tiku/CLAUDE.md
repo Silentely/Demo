@@ -10,6 +10,14 @@
 
 ## 📋 变更记录 (Changelog)
 
+### 2025-12-15
+- **v1.1.0 重大更新**
+  - 新增 argparse CLI 参数解析（`--version`, `-v/--verbose`, `--dry-run`, `-o/--output`）
+  - 新增数据质量验证功能（题干/选项/答案完整性检查）
+  - 优化文件编码检测（只读取 8KB 头部，大文件性能提升）
+  - 增强错误处理（失败/跳过文件收集与汇总报告）
+  - 双脚本功能同步，版本号统一为 v1.1.0
+
 ### 2025-12-13
 - 初始化模块文档
 - 完成脚本清单与接口说明
@@ -37,21 +45,27 @@
 
 ### 主要脚本入口
 
-| 脚本名 | 功能 | 输出格式 | 执行方式 |
-|-------|------|---------|---------|
-| `convert_all_questions_motibang.py` | 多格式转磨题帮模板 | 磨题帮 Excel 模板 | `python3 convert_all_questions_motibang.py [文件...]` |
-| `convert_all_questions_shuatidadang.py` | 多格式转刷题搭档模板 | 刷题搭档 Excel 模板 | `python3 convert_all_questions_shuatidadang.py [文件...]` |
+| 脚本名 | 版本 | 功能 | 输出格式 |
+|-------|------|------|---------|
+| `convert_all_questions_motibang.py` | v1.1.0 | 多格式转磨题帮模板 | 磨题帮 Excel 模板 |
+| `convert_all_questions_shuatidadang.py` | v1.1.0 | 多格式转刷题搭档模板 | 刷题搭档 Excel 模板 |
 
 ### 使用示例
 ```bash
-# 转换默认题库文件
-python3 convert_all_questions_motibang.py
+# 查看版本
+python3 convert_all_questions_motibang.py --version
 
 # 转换指定文件
 python3 convert_all_questions_motibang.py 我的题库.xlsx 另一个题库.docx
 
 # 转换当前目录所有 Excel 文件
 python3 convert_all_questions_motibang.py *.xlsx
+
+# 详细模式（显示验证警告）
+python3 convert_all_questions_motibang.py -v 题库.xlsx
+
+# 仅验证不输出文件（干运行模式）
+python3 convert_all_questions_motibang.py --dry-run 题库.xlsx
 
 # 指定输出目录
 python3 convert_all_questions_motibang.py -o /path/to/output 题库.xlsx
@@ -64,13 +78,39 @@ python3 convert_all_questions_motibang.py --help
 
 ## 🔌 对外接口
 
-### 命令行参数
+### 命令行参数 (v1.1.0)
 ```bash
 python3 convert_all_questions_motibang.py [选项] [文件1] [文件2] ...
 
 选项:
-  -h, --help     显示帮助信息
-  -o, --output   指定输出目录(默认为文件所在目录)
+  -h, --help      显示帮助信息
+  --version       显示版本号
+  -v, --verbose   详细模式，显示验证警告信息
+  --dry-run       仅解析验证，不输出文件
+  -o, --output    指定输出目录（默认为文件所在目录）
+```
+
+### 输出报告格式 (v1.1.0 新增)
+```
+============================================================
+转换报告
+============================================================
+处理题目总数: 1234 道
+
+✓ 成功生成文件 (3 个):
+  - 题库1_磨题帮.xlsx
+  - 题库2_磨题帮.xlsx
+
+⚠ 数据质量警告: 15 个
+  (使用 -v 参数查看详细警告信息)
+
+✗ 处理失败 (1 个):
+  - 损坏的文件.xlsx: 解析失败或无题目
+
+○ 已跳过 (2 个):
+  - 不存在.xlsx: 文件不存在
+  - 图片.png: 不支持的格式
+============================================================
 ```
 
 ### 支持的输入格式
@@ -154,6 +194,26 @@ parse_text_file()             # 纯文本文件
 
 ## 🧪 测试与质量
 
+### 数据质量验证 (v1.1.0 新增)
+
+脚本内置 `validate_question()` 函数，自动检测以下问题：
+
+| 验证项 | 严重性 | 说明 |
+|-------|-------|------|
+| 题干为空或过短 | ⚠️ 警告 | 题干少于 2 个字符 |
+| 选择题无选项 | ⚠️ 警告 | 单选/多选题缺少选项 |
+| 选择题选项不足 | ⚠️ 警告 | 选项数量少于 2 个 |
+| 选择题缺少答案 | ⚠️ 警告 | 答案字段为空 |
+| 填空题缺少答案 | ⚠️ 警告 | answers 列表为空 |
+
+使用 `-v` 参数可查看详细验证警告：
+```bash
+python3 convert_all_questions_motibang.py -v 题库.xlsx
+# 输出示例:
+# ⚠ 验证警告 (第 15 题): 选择题选项数量不足
+# ⚠ 验证警告 (第 23 题): 题干为空或过短
+```
+
 ### 字符规范化测试
 ```python
 # 全角 → 半角转换
@@ -212,14 +272,14 @@ A: 脚本自动识别并统一为 `||` 分隔符,支持输入的分隔符:`,`/`�
 
 ```
 tiku/
-├── convert_all_questions_motibang.py        # 磨题帮转换脚本(1230行,主力)
-├── convert_all_questions_shuatidadang.py    # 刷题搭档转换脚本
+├── convert_all_questions_motibang.py        # 磨题帮转换脚本 v1.1.0 (1300+ 行)
+├── convert_all_questions_shuatidadang.py    # 刷题搭档转换脚本 v1.1.0
 ├── motibang_template1_磨题帮.xlsx           # 磨题帮模板示例
 └── shuatidadang_question_刷题搭档.xlsx      # 刷题搭档模板示例
 ```
 
 **关键文件**:
-- `convert_all_questions_motibang.py`: 功能最完善,支持多种解析器与智能题型识别
+- `convert_all_questions_motibang.py`: 功能最完善，支持多种解析器、智能题型识别、数据验证
 
 ---
 
@@ -286,4 +346,4 @@ if '新题型特征' in text:
 ---
 
 **维护者**: Silentely
-**最后更新**: 2025-12-13
+**最后更新**: 2025-12-15

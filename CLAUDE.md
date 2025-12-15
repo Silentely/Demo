@@ -1,11 +1,18 @@
 # Demo 项目 - AI 上下文索引
 
-> **最后更新**: 2025-12-13
+> **最后更新**: 2025-12-15
 > **维护状态**: 佛系维护 | 自用工具集
 
 ---
 
 ## 📋 变更记录 (Changelog)
+
+### 2025-12-15
+- **tiku 模块 v1.1.0 重大更新**
+  - 新增 argparse CLI 参数解析（`--version`, `-v/--verbose`, `--dry-run`）
+  - 新增数据质量验证功能
+  - 优化文件编码检测性能
+  - 增强错误处理与转换报告
 
 ### 2025-12-13
 - 初始化 AI 上下文文档
@@ -84,7 +91,7 @@ graph TD
 | [Sh/utils](./Sh/utils/CLAUDE.md) | 通用工具脚本 | Shell | ssh_key.sh, ChangeMirrors.sh, backup_postgres.sh 等 | ✅ 完整文档 |
 | [Work](./Work/CLAUDE.md) | Cloudflare Workers 脚本 | JavaScript | mirror.js, proxy.js, tgapi.js 等 | - |
 | [py](./py/CLAUDE.md) | Python 工具脚本 | Python | cc.py | - |
-| [tiku](./tiku/CLAUDE.md) | 题库格式转换工具 | Python | convert_all_questions_motibang.py, convert_all_questions_shuatidadang.py | - |
+| [tiku](./tiku/CLAUDE.md) | 题库格式转换工具 | Python | convert_all_questions_motibang.py, convert_all_questions_shuatidadang.py | ✅ v1.1.0 |
 | [lib](./lib/CLAUDE.md) | 公共库文件 | Shell | common.sh | - |
 | [docs](./docs/CLAUDE.md) | 项目文档 | Markdown | structure.md, examples.md, contributing.md | - |
 | [Action](./Action/CLAUDE.md) | GitHub Actions 工作流模板 | YAML | docker.yml, sync.yml, repo_sync.yml 等 | ✅ 完整文档 |
