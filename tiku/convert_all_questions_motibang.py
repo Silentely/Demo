@@ -119,7 +119,8 @@ def normalize_judgment_answer(raw_answer):
     false_values = [
         'N', 'NO', 'F', 'FALSE', '0',
         '错', '错误', '×', '✗', '✘', '否', 'WRONG', 'INCORRECT',
-        'X', '☓'
+        'X', '☓', 'Ⅹ',  # 包含罗马数字大写 X (U+2169)，因为 .upper() 会把 ⅹ 转成 Ⅹ
+        '叉', '✕', '❌', '⨯', '⨉'  # 更多叉号变体
     ]
 
     if ans in true_values:
@@ -231,7 +232,9 @@ def parse_2024_summary_excel(file_path):
                 'type': '单选题',
                 'options': options,
                 'answer': answer,
-                'source': ''
+                'source': '',
+                '_source_sheet': '选择题',
+                '_source_row': row_idx
             })
 
     # 处理多选题工作表
@@ -258,7 +261,9 @@ def parse_2024_summary_excel(file_path):
                 'type': '多选题',
                 'options': options,
                 'answer': answer,
-                'source': ''
+                'source': '',
+                '_source_sheet': '多选题',
+                '_source_row': row_idx
             })
 
     # 处理判断题工作表
@@ -276,7 +281,9 @@ def parse_2024_summary_excel(file_path):
                 'question': str(question_text).strip(),
                 'type': '判断题',
                 'answer': answer,
-                'source': ''
+                'source': '',
+                '_source_sheet': '判断题',
+                '_source_row': row_idx
             })
 
     # 处理填空题工作表
@@ -297,7 +304,9 @@ def parse_2024_summary_excel(file_path):
                 'type': '填空题',
                 'answers': answers,
                 'raw_answer': str(answer),
-                'source': ''
+                'source': '',
+                '_source_sheet': '填空题',
+                '_source_row': row_idx
             })
 
     # 处理简答题工作表
@@ -314,7 +323,9 @@ def parse_2024_summary_excel(file_path):
                 'question': str(question_text).strip(),
                 'type': '简答题',
                 'answer': str(answer).strip(),
-                'source': ''
+                'source': '',
+                '_source_sheet': '简答题',
+                '_source_row': row_idx
             })
 
     # 处理论述题工作表
@@ -331,7 +342,9 @@ def parse_2024_summary_excel(file_path):
                 'question': str(question_text).strip(),
                 'type': '简答题',  # 论述题归类为简答题
                 'answer': str(answer).strip(),
-                'source': ''
+                'source': '',
+                '_source_sheet': '论述题',
+                '_source_row': row_idx
             })
 
     return questions
@@ -1077,13 +1090,16 @@ def deduplicate_questions(questions):
     """
     题目去重：基于题干+选项+答案综合判断，保留第一次出现的题目
     注意：题干相同但选项或答案不同的视为不同题目
-    返回: (去重后的题目列表, 移除的重复数量)
+    返回: (去重后的题目列表, 移除的重复数量, 重复题目详情列表)
+    重复题目详情格式: [(重复题位置, 首次出现位置, 题干摘要, 题型), ...]
+    位置格式: "工作表名 第N行" 或 "第N题"（无原始位置时）
     """
-    seen = set()
+    seen = {}  # key -> (首次出现的题目对象, 列表索引)
     unique_questions = []
     duplicates_removed = 0
+    duplicate_details = []  # 记录重复题目详情
 
-    for q in questions:
+    for idx, q in enumerate(questions):
         # 构建唯一标识：题干 + 选项内容 + 答案
         question_text = q.get('question', '').strip()
         if not question_text:
@@ -1109,12 +1125,33 @@ def deduplicate_questions(questions):
         unique_key = f"{question_text}###{options_str}###{answer_str}"
 
         if unique_key not in seen:
-            seen.add(unique_key)
+            seen[unique_key] = (q, idx + 1)  # 存储题目对象和列表索引
             unique_questions.append(q)
         else:
             duplicates_removed += 1
+            first_q, first_list_idx = seen[unique_key]
 
-    return unique_questions, duplicates_removed
+            # 获取当前重复题的原始位置
+            dup_sheet = q.get('_source_sheet', '')
+            dup_row = q.get('_source_row', 0)
+            if dup_sheet and dup_row:
+                dup_location = f"[{dup_sheet}] 第{dup_row}行"
+            else:
+                dup_location = f"第{idx + 1}题"
+
+            # 获取首次出现题的原始位置
+            first_sheet = first_q.get('_source_sheet', '')
+            first_row = first_q.get('_source_row', 0)
+            if first_sheet and first_row:
+                first_location = f"[{first_sheet}] 第{first_row}行"
+            else:
+                first_location = f"第{first_list_idx}题"
+
+            q_type = q.get('type', '未知')
+            q_preview = question_text[:40] + ('...' if len(question_text) > 40 else '')
+            duplicate_details.append((dup_location, first_location, q_preview, q_type))
+
+    return unique_questions, duplicates_removed, duplicate_details
 
 
 def validate_question(q, idx=0):
@@ -1255,9 +1292,12 @@ def process_file(file_path, parser_func, base_path, suffix='_磨题帮', verbose
                 print(f'    ... 还有 {len(warning_details) - 10} 个警告')
 
     # 去重处理
-    questions, duplicates_removed = deduplicate_questions(questions)
+    questions, duplicates_removed, duplicate_details = deduplicate_questions(questions)
     if duplicates_removed > 0:
         print(f'  去除重复题目: {duplicates_removed} 道，剩余 {len(questions)} 道')
+        # 输出重复题目详情
+        for dup_loc, first_loc, q_preview, q_type in duplicate_details:
+            print(f'    ↳ {dup_loc} [{q_type}] 与 {first_loc} 重复: "{q_preview}"')
 
     print_statistics(questions, base_name)
 

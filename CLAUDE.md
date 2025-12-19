@@ -1,11 +1,16 @@
 # Demo 项目 - AI 上下文索引
 
-> **最后更新**: 2025-12-15
+> **最后更新**: 2025-12-19
 > **维护状态**: 佛系维护 | 自用工具集
 
 ---
 
 ## 📋 变更记录 (Changelog)
+
+### 2025-12-19
+- **tiku 模块 v1.1.1 功能增强**
+  - 判断题答案识别新增罗马数字及更多叉号变体
+  - 去重功能显示原题库位置（工作表名+行号）
 
 ### 2025-12-15
 - **tiku 模块 v1.1.0 重大更新**
@@ -91,7 +96,7 @@ graph TD
 | [Sh/utils](./Sh/utils/CLAUDE.md) | 通用工具脚本 | Shell | ssh_key.sh, ChangeMirrors.sh, backup_postgres.sh 等 | ✅ 完整文档 |
 | [Work](./Work/CLAUDE.md) | Cloudflare Workers 脚本 | JavaScript | mirror.js, proxy.js, tgapi.js 等 | - |
 | [py](./py/CLAUDE.md) | Python 工具脚本 | Python | cc.py | - |
-| [tiku](./tiku/CLAUDE.md) | 题库格式转换工具 | Python | convert_all_questions_motibang.py, convert_all_questions_shuatidadang.py | ✅ v1.1.0 |
+| [tiku](./tiku/CLAUDE.md) | 题库格式转换工具 | Python | convert_all_questions_motibang.py, convert_all_questions_shuatidadang.py | ✅ v1.1.1 |
 | [lib](./lib/CLAUDE.md) | 公共库文件 | Shell | common.sh | - |
 | [docs](./docs/CLAUDE.md) | 项目文档 | Markdown | structure.md, examples.md, contributing.md | - |
 | [Action](./Action/CLAUDE.md) | GitHub Actions 工作流模板 | YAML | docker.yml, sync.yml, repo_sync.yml 等 | ✅ 完整文档 |
