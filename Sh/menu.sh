@@ -8,7 +8,7 @@ set -euo pipefail
 # - 只提供本地 SOCKS5 代理
 # =========================================================
 
-VERSION="container-proxy-1.3.5 (Alpine TUN 自动创建 + 权限检查 + 日志增强)"
+VERSION="container-proxy-1.3.6 (升级 wireproxy 到 v1.0.9 + 移除 -v + 日志优化)"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -84,10 +84,10 @@ download_wgcf() {
 
 download_wireproxy() {
   have_cmd wireproxy && { info "wireproxy 已存在，跳过安装"; return; }
-  info "使用 go install 安装 wireproxy（pufferffish fork）..."
+  info "使用 go install 安装 wireproxy（pufferffish fork，指定稳定版 v1.0.9）..."
 
   export GOPATH=/tmp/go
-  go install github.com/pufferffish/wireproxy/cmd/wireproxy@latest || error "go install wireproxy 失败"
+  go install github.com/pufferffish/wireproxy/cmd/wireproxy@v1.0.9 || error "go install wireproxy v1.0.9 失败"
 
   local bin_path="$GOPATH/bin/wireproxy"
   [[ -f "$bin_path" ]] || bin_path="/root/go/bin/wireproxy"
@@ -99,8 +99,10 @@ download_wireproxy() {
     error "未找到 wireproxy 二进制"
   fi
 
+  # 验证版本
+  local wp_version=$(wireproxy --version 2>/dev/null || echo "未知")
+  info "wireproxy 安装成功，版本: $wp_version"
   wireproxy --help >/dev/null 2>&1 || error "wireproxy 验证失败"
-  info "wireproxy 安装成功"
 }
 
 generate_wgcf_profile() {
@@ -131,6 +133,12 @@ Endpoint = $endpoint
 [Socks5]
 BindAddress = 127.0.0.1:${WARP_SOCKS_PORT}
 EOF
+
+  # 验证生成的文件格式
+  if ! grep -q "BindAddress = 127.0.0.1:${WARP_SOCKS_PORT}" "$WIREPROXY_CONFIG"; then
+    error "配置文件生成失败！BindAddress 格式不对。内容预览：$(head -n 30 "$WIREPROXY_CONFIG")"
+  fi
+  info "配置文件生成并验证成功"
 }
 
 prepare_tun_device() {
@@ -172,17 +180,20 @@ start_wireproxy_bg() {
   # 清空旧日志，便于本次调试（可选，根据需求注释掉）
   : > "$WARP_LOG_FILE" 2>/dev/null || true
 
-if ! grep -q "BindAddress = 127.0.0.1:" "$WIREPROXY_CONFIG"; then
+  # 检查配置文件格式
+  if ! grep -q "BindAddress = 127.0.0.1:" "$WIREPROXY_CONFIG"; then
     error "配置文件格式错误：$WIREPROXY_CONFIG 中的 [Socks5] 段缺少端口！
 请确保 BindAddress 格式为 '127.0.0.1:端口'（例如 127.0.0.1:40000），而不是单独的 BindAddress 和 BindPort。"
   fi
 
-  nohup wireproxy -c "$WIREPROXY_CONFIG" -d -v >>"$WARP_LOG_FILE" 2>&1 &
+  # 启动（移除 -v，避免打印版本并退出；后台模式默认日志少，但进程运行正常）
+  nohup wireproxy -c "$WIREPROXY_CONFIG" -d >>"$WARP_LOG_FILE" 2>&1 &
   local pid=$!
   echo "$pid" > "$WARP_PID_FILE"
-  info "wireproxy 已后台启动，PID: $pid，日志: $WARP_LOG_FILE"
+  info "wireproxy 已后台启动，PID: $pid，日志: $WARP_LOG_FILE（后台模式下日志可能为空，这是正常行为）"
 
-  sleep 5
+  # 多给点时间让它启动和连接
+  sleep 8
   tail -n 50 "$WARP_LOG_FILE" || true  # 多打印几行，便于看到连接或错误
 }
 
@@ -195,9 +206,10 @@ setup_alpine_warp() {
   sleep "$WARP_START_DELAY"
   start_wireproxy_bg
 
-  wait_for_socks5 || error "WireProxy SOCKS5 未启动。请查看 $WARP_LOG_FILE（常见原因：缺少 NET_ADMIN capability 或 TUN 设备权限）"
+  wait_for_socks5 || error "WireProxy SOCKS5 未启动。请查看 $WARP_LOG_FILE（常见原因：缺少 NET_ADMIN capability 或 TUN 设备权限，或 WireGuard 连接失败）"
   info "Alpine WireProxy SOCKS5 已就绪：socks5h://127.0.0.1:${WARP_SOCKS_PORT}"
   info "测试命令：curl --socks5 127.0.0.1:${WARP_SOCKS_PORT} https://ip.gs"
+  info "后台模式日志可能为空，使用 ss/ps 检查运行状态，或 curl 测试实际代理效果"
 }
 
 refresh_alpine() {
