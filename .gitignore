@@ -28,3 +28,4 @@ stats-*.json
 *.sw?
 .claude
 .codex
+.ace-tool/

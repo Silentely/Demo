@@ -187,16 +187,34 @@ case "${arch}" in
 esac
 
 echo -e "${CYAN}⚙️  检测到系统架构: ${arch} (对应包架构: ${deb_arch})${NC}"
-release_name=$(echo "${latest_release_info}" | jq -r --arg ARCH "${deb_arch}" '.assets[].name | select(contains($ARCH) and endswith(".deb"))')
+
+# 优先选择 polyfilled 版本(兼容性更好),没有则选择标准版本
+release_name=$(echo "${latest_release_info}" | jq -r --arg ARCH "${deb_arch}" \
+    '.assets[].name | select(contains($ARCH) and endswith(".deb"))' | grep -E "polyfilled|${deb_arch}" | head -1)
+
+# 如果没有找到 polyfilled 版本,回退到任意匹配的 deb 包
+if [ -z "${release_name}" ]; then
+    release_name=$(echo "${latest_release_info}" | jq -r --arg ARCH "${deb_arch}" \
+        '.assets[].name | select(contains($ARCH) and endswith(".deb"))' | head -1)
+fi
 
 if [ -z "${release_name}" ]; then
-    echo "错误：无法为您的架构 '${deb_arch}' 找到对应的 .deb 发行包。"
+    echo -e "${RED}❌ 错误：无法为您的架构 '${deb_arch}' 找到对应的 .deb 发行包。${NC}"
     exit 1
 fi
 
+echo -e "${CYAN}📦 选择的安装包: ${release_name}${NC}"
+
 release_url="${GITHUB_URL_PREFIX}https://github.com/${project_name}/releases/download/${latest_version}/${release_name}"
 echo -e "${CYAN}⏬ 准备从以下链接下载: ${release_url}${NC}"
-wget -c "${release_url}" -q --show-progress
+
+# 尝试下载,保留错误信息以便调试
+if ! wget -c "${release_url}" --show-progress -O "${release_name}" 2>&1; then
+    echo -e "${RED}❌ 下载失败!请检查网络连接或尝试使用镜像加速。${NC}"
+    echo -e "${YELLOW}💡 提示: 您可以手动下载后使用 'dpkg -i ${release_name}' 安装${NC}"
+    exit 1
+fi
+
 echo -e "${GREEN}✅ 下载完成。准备安装...${NC}"
 
 if [ "$EUID" -ne 0 ]; then
