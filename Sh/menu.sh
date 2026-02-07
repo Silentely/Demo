@@ -250,8 +250,8 @@ wait_for_socks5() {
 
 apt_install_deps() {
   info "安装依赖（apt）..."
-  apt-get update -y >/dev/null
-  apt-get install -y --no-install-recommends \
+  apt update -y >/dev/null
+  apt install -y --no-install-recommends \
     ca-certificates curl wget gnupg lsb-release \
     iproute2 procps net-tools openssl >/dev/null
 }
