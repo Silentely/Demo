@@ -1,33 +1,40 @@
-#!/bin/bash
-#
+#!/usr/bin/env bash
+
 # ==============================================================================
-# Linux SSH Security Enhancement & Configuration Script
+# Linux SSH 安全配置与密钥加固脚本
+# 项目地址: https://github.com/Silentely/Demo
 #
-# Description: A tool to quickly and safely configure SSH server settings on
-#              Linux systems, focusing on security best practices.
-# Author:      @Silentely/Demo
+# 功能特性:
+# 1. 优先采用 /etc/ssh/sshd_config.d/00-security.conf (drop-in)，彻底解决
+#    50-cloud-init.conf 与云厂商 99-*.conf 覆盖 PasswordAuthentication 的问题。
+# 2. 完美适配 Ubuntu 24.04+ ssh.socket 激活机制，避免修改端口后新端口无法监听。
+# 3. 自动检测并放行本机防火墙（UFW / Firewalld）及 SELinux 端口策略。
+# 4. 配置修改前后自动语法检查（sshd -t），支持故障自动回滚与备份轮转。
+# 5. 支持非交互式 CLI 参数（-a, -k, -p, -y），管道安全重定向（exec < /dev/tty）。
 # ==============================================================================
 
-# --- 终端输入保护（支持 curl ... | bash 管道式运行） ---
-if [[ ! -t 0 ]] && { true < /dev/tty; } 2>/dev/null; then
-    exec < /dev/tty 2>/dev/null || true
+# 若从管道运行，重定向输入流以保证交互可用
+if [ -t 0 ]; then
+    :
+elif [ -e /dev/tty ]; then
+    exec < /dev/tty
 fi
 
-# --- 全局常量和颜色定义 ---
-if command -v tput >/dev/null 2>&1 && tput setaf 1 >/dev/null 2>&1; then
-    color_blue=$(tput setaf 4)
-    color_green=$(tput setaf 2)
-    color_yellow=$(tput setaf 3)
-    color_red=$(tput setaf 1)
-    color_bold=$(tput bold)
-    color_reset=$(tput sgr0)
-else
+# 颜色与样式配置
+if [[ -t 1 ]]; then
     color_blue='\033[0;34m'
     color_green='\033[0;32m'
     color_yellow='\033[0;33m'
     color_red='\033[0;31m'
     color_bold='\033[1m'
     color_reset='\033[0m'
+else
+    color_blue=''
+    color_green=''
+    color_yellow=''
+    color_red=''
+    color_bold=''
+    color_reset=''
 fi
 
 readonly PUBKEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJWYt+IEmAg9n30UBVyQgeDECsSmfS+Jwb1nO93rao0d"
@@ -38,10 +45,12 @@ readonly SSHD_CONFIG="/etc/ssh/sshd_config"
 readonly SSHD_CONFIG_D="/etc/ssh/sshd_config.d"
 readonly DROPIN_CONF="/etc/ssh/sshd_config.d/00-security.conf"
 
-# 全局备份追踪变量（用于失败时精准回滚）
+# 全局状态变量
+NON_INTERACTIVE=false
 BACKUP_MAIN_CONFIG=""
 BACKUP_DROPIN_CONFIG=""
 DROPIN_WAS_NEW=false
+ORIG_PORT=""
 
 _log() {
     local type="$1"
@@ -76,18 +85,17 @@ prompt_yes_no() {
     done
 }
 
-# 选择覆盖或追加公钥
 choose_overwrite_or_append() {
     local file="$1"
     if [[ -s "$file" ]]; then
         _log warn "$file 已存在且非空。"
         if prompt_yes_no "是否覆盖原有内容？(Y=覆盖，n=追加) " "n"; then
-            return 0  # 覆盖
+            return 0
         else
-            return 1  # 追加
+            return 1
         fi
     else
-        return 1  # 空文件，直接追加
+        return 1
     fi
 }
 
@@ -96,6 +104,32 @@ check_root() {
         _log error "此脚本需要以 root 权限运行，请使用 'sudo ./script.sh'。"
         exit 1
     fi
+}
+
+get_pubkey_fingerprint() {
+    local key_str="$1"
+    if command -v ssh-keygen >/dev/null 2>&1; then
+        local fp
+        fp=$(printf "%s\n" "$key_str" | ssh-keygen -lf /dev/stdin 2>/dev/null)
+        if [[ -n "$fp" ]]; then
+            echo "$fp"
+            return
+        fi
+    fi
+    echo "$key_str"
+}
+
+fetch_github_keys() {
+    local username="$1"
+    local url="https://github.com/${username}.keys"
+    local keys=""
+    if command -v curl >/dev/null 2>&1; then
+        keys=$(curl -fsSL --connect-timeout 8 --max-time 15 "$url" 2>/dev/null)
+    elif command -v wget >/dev/null 2>&1; then
+        keys=$(wget -qO- --timeout=15 "$url" 2>/dev/null)
+    fi
+    keys=$(echo "$keys" | grep -E "^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-[a-z0-9-]+|sk-(ssh|ecdsa)-[a-z0-9@.-]+)" || true)
+    echo "$keys"
 }
 
 show_header() {
@@ -118,214 +152,176 @@ show_env_info() {
     _log info "当前环境信息"
     local os distro arch time_now host
     distro=$(grep -oP '(?<=^PRETTY_NAME=").*(?="$)' /etc/os-release 2>/dev/null || lsb_release -ds 2>/dev/null || uname -s)
+    os=$(uname -s)
     arch=$(uname -m)
-    os="$distro $arch"
-    time_now=$(date +"%Y-%m-%d %H:%M %Z")
+    time_now=$(date +"%Y-%m-%d %H:%M:%S %Z")
     host=$(hostname)
-    printf "主机名    : %s%s%s\n" "$color_yellow" "$host" "$color_reset"
-    printf "环境      : %s%s%s\n" "$color_yellow" "$os" "$color_reset"
-    printf "时间      : %s%s%s\n" "$color_green" "$time_now" "$color_reset"
-    echo
+    printf "  主机名称: %s\n" "$host"
+    printf "  系统发行: %s (%s)\n" "$distro" "$os"
+    printf "  系统架构: %s\n" "$arch"
+    printf "  当前时间: %s\n" "$time_now"
+    echo "------------------------------------------------------------------"
 }
 
-# 按照 First-Match 原则与 sshd -T 真实状态读取配置
+show_status_info() {
+    _log info "SSH 服务当前配置状态"
+    local cur_port cur_permit_root cur_pwd_auth
+    cur_port=$(get_sshd_config_value "port")
+    [[ -z "$cur_port" ]] && cur_port="22 (默认)"
+
+    cur_permit_root=$(get_sshd_config_value "permitrootlogin")
+    [[ -z "$cur_permit_root" ]] && cur_permit_root="prohibit-password / 默认"
+
+    cur_pwd_auth=$(get_sshd_config_value "passwordauthentication")
+    [[ -z "$cur_pwd_auth" ]] && cur_pwd_auth="yes (默认)"
+
+    printf "  SSH 服务端口:       %s\n" "$cur_port"
+    printf "  允许 Root 登录:     %s\n" "$cur_permit_root"
+    printf "  密码认证登录:       %s\n" "$cur_pwd_auth"
+
+    if [[ -d "$SSHD_CONFIG_D" ]]; then
+        local dropin_count
+        dropin_count=$(find "$SSHD_CONFIG_D" -maxdepth 1 -name "*.conf" 2>/dev/null | wc -l)
+        printf "  Drop-in 配置目录:   %s (发现 %s 个配置片段)\n" "$SSHD_CONFIG_D" "$dropin_count"
+        if [[ -f "$DROPIN_CONF" ]]; then
+            printf "  优先安全配置:       %s (已就绪)\n" "$DROPIN_CONF"
+        fi
+    fi
+    echo "------------------------------------------------------------------"
+}
+
+show_completion() {
+    echo "=================================================================="
+    _log success "配置应用完成！"
+    echo "=================================================================="
+}
+
+get_ssh_service_name() {
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl list-unit-files 2>/dev/null | grep -q "^ssh\.service"; then
+            echo "ssh"
+            return
+        elif systemctl list-unit-files 2>/dev/null | grep -q "^sshd\.service"; then
+            echo "sshd"
+            return
+        fi
+    fi
+    if [[ -f /etc/init.d/ssh ]]; then
+        echo "ssh"
+    else
+        echo "sshd"
+    fi
+}
+
 get_sshd_config_value() {
     local key="$1"
-    local val=""
+    local value=""
 
-    # 1. 优先使用 sshd -T 获取当前运行时解析出的最终生效值
-    val=$(sshd -T 2>/dev/null | grep -iE "^${key}\s+" | awk '{print $2}' | head -n 1)
-    if [[ -n "$val" ]]; then
-        echo "$val"
-        return 0
+    if command -v sshd >/dev/null 2>&1; then
+        value=$(sshd -T 2>/dev/null | grep -i "^${key} " | head -n 1 | awk '{print $2}')
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return
+        fi
     fi
 
-    # 2. 静态解析 Fallback（严格遵守 First-Match 原则）
-    # 2.1 检查 drop-in 目录（字典序排在最前的有效非注释配置）
-    if [[ -d "$SSHD_CONFIG_D" ]]; then
-        for conf in "$SSHD_CONFIG_D"/*.conf; do
-            [[ -f "$conf" ]] || continue
-            val=$(grep -iE "^\s*${key}\s+" "$conf" 2>/dev/null | grep -v '^\s*#' | awk '{print $2}' | head -n 1)
-            if [[ -n "$val" ]]; then
-                echo "$val"
-                return 0
-            fi
-        done
+    if [[ -f "$DROPIN_CONF" ]]; then
+        value=$(grep -iE "^\s*${key}\s+" "$DROPIN_CONF" 2>/dev/null | tail -n 1 | awk '{print $2}')
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return
+        fi
     fi
 
-    # 2.2 检查主配置文件（排除注释，取第一条匹配值）
     if [[ -f "$SSHD_CONFIG" ]]; then
-        val=$(grep -iE "^\s*${key}\s+" "$SSHD_CONFIG" 2>/dev/null | grep -v '^\s*#' | awk '{print $2}' | head -n 1)
-        if [[ -n "$val" ]]; then
-            echo "$val"
-            return 0
+        value=$(grep -iE "^\s*${key}\s+" "$SSHD_CONFIG" 2>/dev/null | tail -n 1 | awk '{print $2}')
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return
         fi
     fi
 
     echo ""
 }
 
-show_status_info() {
-    _log info "SSH 运行状态"
-    local port auth pubkey_auth connections sshd_status lan_ip wan_ip_v4 wan_ip_v6 wan_ip
-    port=$(get_sshd_config_value "port")
-    [[ -z "$port" ]] && port="22"
-    auth=$(get_sshd_config_value "passwordauthentication")
-    [[ -z "$auth" ]] && auth="未知"
-    pubkey_auth=$(get_sshd_config_value "pubkeyauthentication")
-    [[ -z "$pubkey_auth" ]] && pubkey_auth="未知"
+ensure_dropin_included() {
+    if [[ ! -d "$SSHD_CONFIG_D" ]]; then
+        mkdir -p "$SSHD_CONFIG_D"
+        chmod 755 "$SSHD_CONFIG_D"
+    fi
 
-    lan_ip=$(hostname -I 2>/dev/null | awk '{print $1}')
-    [[ -z "$lan_ip" ]] && lan_ip="127.0.0.1"
-
-    # 超时设为 2 秒，避免国内外网络阻断导致长时间卡顿
-    wan_ip_v4=$(curl -s --max-time 2 ip.sb -4 2>/dev/null || curl -s --max-time 2 api4.ipify.org 2>/dev/null)
-    [[ -z "$wan_ip_v4" ]] && wan_ip_v4="IPV4获取超时"
-    wan_ip_v6=$(curl -s --max-time 2 ip.sb -6 2>/dev/null || curl -s --max-time 2 api6.ipify.org 2>/dev/null)
-    [[ -z "$wan_ip_v6" ]] && wan_ip_v6="IPV6获取超时"
-    wan_ip="${wan_ip_v4}/${wan_ip_v6}"
-
-    connections_val=$(ss -tun 2>/dev/null | grep -c ":$port" 2>/dev/null)
-    connections=${connections_val:-"未知"}
-    sshd_status_val=$(systemctl is-active sshd 2>/dev/null || systemctl is-active ssh 2>/dev/null || systemctl is-active ssh.socket 2>/dev/null)
-    sshd_status=${sshd_status_val:-"未知"}
-
-    printf "端口      : %s%s%s\n" "$color_yellow" "$port" "$color_reset"
-    printf "密码认证  : %s%s%s\n" "$color_yellow" "$auth" "$color_reset"
-    printf "密钥认证  : %s%s%s\n" "$color_yellow" "$pubkey_auth" "$color_reset"
-    printf "服务状态  : %s%s%s\n" "$color_yellow" "$sshd_status" "$color_reset"
-    printf "连接数    : %s%s%s\n" "$color_yellow" "$connections" "$color_reset"
-    printf "本机IP    : %s%s%s\n" "$color_yellow" "$lan_ip" "$color_reset"
-    printf "公网IP    : %s%s%s\n" "$color_yellow" "$wan_ip" "$color_reset"
-    printf "%s\n" "------------------------------------------------------------------"
-}
-
-show_completion() {
-    printf "%s\n" "=================================================================="
-    _log success "SSH 配置已完成"
-    printf "  项目仓库: %s\n" "$PROJECT_URL"
-    printf "  🙏 感谢使用本脚本！如有帮助，欢迎 star 支持！\n"
-    printf "%s\n" "=================================================================="
-    echo
-}
-
-# 确保 drop-in 目录在主配置文件顶部被 Include 引入
-ensure_sshd_config_d_supported() {
-    mkdir -p "$SSHD_CONFIG_D" && chmod 755 "$SSHD_CONFIG_D"
     if [[ -f "$SSHD_CONFIG" ]]; then
-        if ! grep -qE "^\s*Include\s+/etc/ssh/sshd_config\.d/\*\.conf" "$SSHD_CONFIG"; then
-            if ! grep -qiE "^\s*Include\s+.*sshd_config\.d" "$SSHD_CONFIG"; then
-                _log info "在 $SSHD_CONFIG 首部添加 Include /etc/ssh/sshd_config.d/*.conf 以支持模块化配置"
-                sed -i '1i Include /etc/ssh/sshd_config.d/*.conf\n' "$SSHD_CONFIG"
-            fi
+        if ! grep -qiE "^\s*Include\s+.*sshd_config.d" "$SSHD_CONFIG"; then
+            _log info "在主配置文件第一行注入 'Include /etc/ssh/sshd_config.d/*.conf'..."
+            sed -i '1i Include /etc/ssh/sshd_config.d/*.conf\n' "$SSHD_CONFIG"
         fi
     fi
 }
 
-# 在主配置文件中更新配置（旧系统兼容或同步更新）
-update_main_sshd_config() {
-    local key="$1"
-    local value="$2"
-    if [[ -f "$SSHD_CONFIG" ]]; then
-        if grep -qE "^\s*#?\s*${key}\s+" "$SSHD_CONFIG"; then
-            sed -i -E "s/^\s*#?\s*${key}\s+.*/${key} ${value}/" "$SSHD_CONFIG"
-        else
-            echo "${key} ${value}" >> "$SSHD_CONFIG"
-        fi
-    fi
-}
-
-# 核心安全策略写入：使用 00-security.conf 解决 first-match 覆盖隐患
 apply_security_policy() {
-    local mode="$1" # "key_only", "both", "pwd_only"
-    local port="$2"
+    local mode="$1"
+    local port="${2:-22}"
 
-    ensure_sshd_config_d_supported
+    ensure_dropin_included
 
-    local pubkey_val="yes"
-    local passwd_val="no"
-    local kbd_val="no"
-    local root_val="prohibit-password"
+    local pwd_auth="yes"
+    local permit_root="yes"
+    local pubkey_auth="yes"
 
     case "$mode" in
-        key_only)
-            pubkey_val="yes"
-            passwd_val="no"
-            kbd_val="no"
-            root_val="prohibit-password"
+        "key_only")
+            pwd_auth="no"
+            permit_root="prohibit-password"
+            pubkey_auth="yes"
             ;;
-        both)
-            pubkey_val="yes"
-            passwd_val="yes"
-            kbd_val="yes"
-            root_val="yes"
+        "pwd_only")
+            pwd_auth="yes"
+            permit_root="yes"
+            pubkey_auth="no"
             ;;
-        pwd_only)
-            pubkey_val="no"
-            passwd_val="yes"
-            kbd_val="yes"
-            root_val="yes"
+        "both")
+            pwd_auth="yes"
+            permit_root="yes"
+            pubkey_auth="yes"
             ;;
     esac
 
-    # 写入 00-security.conf（由于前缀 00-，在 drop-in 目录中按字典序排在最前）
-    # 彻底杜绝 50-cloud-init.conf 或 99-*.conf 的覆盖
-    cat << EOF > "$DROPIN_CONF"
+    _log info "写入高优先级配置片段: $DROPIN_CONF"
+    cat > "$DROPIN_CONF" <<EOF
 # ==============================================================================
-# Managed by Demo SSH Security Script - Priority 00 (First match wins)
-# 优先级说明：sshd 采用 First Match 机制，本文件排在首位以防止被其他配置覆盖
+# Managed by Demo SSH Security Script (Highest Priority 00-security.conf)
+# OpenSSH applies the first matched setting. Drop-ins here take precedence over
+# cloud-init (50-cloud-init.conf) and cloud provider configs (99-*.conf).
 # ==============================================================================
 Port ${port}
-PubkeyAuthentication ${pubkey_val}
-PasswordAuthentication ${passwd_val}
-KbdInteractiveAuthentication ${kbd_val}
-ChallengeResponseAuthentication ${kbd_val}
-PermitRootLogin ${root_val}
-
-# 连接速度优化（禁用耗时的 DNS 反向解析与 GSSAPI 超时）
-UseDNS no
-GSSAPIAuthentication no
-TCPKeepAlive yes
-ClientAliveInterval 60
-ClientAliveCountMax 3
-LoginGraceTime 30
+PasswordAuthentication ${pwd_auth}
+PubkeyAuthentication ${pubkey_auth}
+PermitRootLogin ${permit_root}
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
 EOF
-    chmod 600 "$DROPIN_CONF"
+    chmod 644 "$DROPIN_CONF"
 
-    # 同步更新主配置文件中的基本项（双重保险，兼顾无 drop-in 工具）
     update_main_sshd_config "Port" "$port"
-    update_main_sshd_config "PubkeyAuthentication" "$pubkey_val"
-    update_main_sshd_config "PasswordAuthentication" "$passwd_val"
-    update_main_sshd_config "PermitRootLogin" "$root_val"
-    update_main_sshd_config "UseDNS" "no"
-    update_main_sshd_config "GSSAPIAuthentication" "no"
-
-    _log success "安全策略已写入优先配置: $DROPIN_CONF"
+    update_main_sshd_config "PasswordAuthentication" "$pwd_auth"
+    update_main_sshd_config "PubkeyAuthentication" "$pubkey_auth"
+    update_main_sshd_config "PermitRootLogin" "$permit_root"
+    update_main_sshd_config "KbdInteractiveAuthentication" "no"
+    update_main_sshd_config "ChallengeResponseAuthentication" "no"
 }
 
-get_ssh_service_name() {
-    # 1. 检查当前活跃的服务名
-    for s in sshd ssh; do
-        if systemctl is-active --quiet "$s" 2>/dev/null; then
-            echo "$s"
-            return 0
-        fi
-    done
+update_main_sshd_config() {
+    local key="$1"
+    local value="$2"
+    [[ ! -f "$SSHD_CONFIG" ]] && return 0
 
-    # 2. 检查已安装的 service 单元
-    for s in sshd ssh; do
-        if systemctl list-unit-files "${s}.service" 2>/dev/null | grep -qE "^${s}\.service"; then
-            echo "$s"
-            return 0
-        fi
-    done
-
-    # 3. 兜底回退
-    echo "sshd"
+    if grep -q -i -E "^\s*#?\s*${key}\s+" "$SSHD_CONFIG"; then
+        sed -i -E "s/^\s*#?\s*(${key}\s+).*/\1${value}/I" "$SSHD_CONFIG"
+    else
+        echo "${key} ${value}" >> "$SSHD_CONFIG"
+    fi
 }
 
-# 针对 Ubuntu 24.04+ systemd socket 激活机制的适配
-# （若开启了 ssh.socket，改端口后 restart ssh 仍然只会监听 22，需禁用 socket 切换为原生 service）
 handle_ubuntu_socket_activation() {
     if command -v systemctl >/dev/null 2>&1; then
         if systemctl is-active --quiet ssh.socket 2>/dev/null || systemctl is-enabled --quiet ssh.socket 2>/dev/null; then
@@ -339,10 +335,12 @@ handle_ubuntu_socket_activation() {
 }
 
 backup_configs() {
-    # 如果本次交互会话已经备份过，无需重复覆盖初始备份
     if [[ -n "$BACKUP_MAIN_CONFIG" ]]; then
         return 0
     fi
+
+    ORIG_PORT=$(get_sshd_config_value "port")
+    [[ -z "$ORIG_PORT" ]] && ORIG_PORT="22"
 
     local timestamp
     timestamp=$(date +%Y%m%d_%H%M%S)
@@ -361,7 +359,6 @@ backup_configs() {
         DROPIN_WAS_NEW=true
     fi
 
-    # 自动维护备份轮转：保留最近 5 个备份文件，防止垃圾堆积
     ls -t /etc/ssh/sshd_config.bak_* 2>/dev/null | tail -n +6 | xargs -r rm -f 2>/dev/null
     ls -t /etc/ssh/sshd_config.d/00-security.conf.bak_* 2>/dev/null | tail -n +6 | xargs -r rm -f 2>/dev/null
 }
@@ -378,35 +375,48 @@ rollback_configs() {
         _log info "已清理新增的配置: $DROPIN_CONF"
     elif [[ -n "$BACKUP_DROPIN_CONFIG" && -f "$BACKUP_DROPIN_CONFIG" ]]; then
         cp "$BACKUP_DROPIN_CONFIG" "$DROPIN_CONF"
-        _log info "已恢复原有优先配置: $DROPIN_CONF"
+        _log info "已恢复安全配置片段: $DROPIN_CONF"
+    fi
+
+    if [[ -n "$ORIG_PORT" ]]; then
+        check_and_open_firewall_port "$ORIG_PORT"
     fi
 }
 
-# 验证 sshd 语法并兼容 OpenSSH 版本的特定指令
 test_and_fix_sshd_syntax() {
-    local test_err
-    test_err=$(sshd -t 2>&1)
-    if [[ $? -eq 0 ]]; then
+    if ! command -v sshd >/dev/null 2>&1; then
         return 0
     fi
 
-    # 如果是因为较老版本 OpenSSH 不识别 KbdInteractiveAuthentication
-    if echo "$test_err" | grep -qi "KbdInteractiveAuthentication"; then
-        _log warn "检测到当前 OpenSSH 版本不支持 KbdInteractiveAuthentication，正在自动兼容处理..."
-        sed -i '/KbdInteractiveAuthentication/d' "$DROPIN_CONF" 2>/dev/null
+    local test_output
+    test_output=$(sshd -t 2>&1)
+    local test_status=$?
+
+    if [ $test_status -eq 0 ]; then
+        return 0
     fi
 
-    # 如果是因为较新版本 OpenSSH 不识别 ChallengeResponseAuthentication
-    if echo "$test_err" | grep -qi "ChallengeResponseAuthentication"; then
-        _log warn "检测到当前 OpenSSH 版本不支持 ChallengeResponseAuthentication，正在自动兼容处理..."
-        sed -i '/ChallengeResponseAuthentication/d' "$DROPIN_CONF" 2>/dev/null
+    _log warn "检测到 SSH 语法存在冲突或错误:"
+    echo "$test_output"
+
+    local bad_line bad_file
+    bad_line=$(echo "$test_output" | grep -oP '(?<=line )[0-9]+' | head -n 1)
+    bad_file=$(echo "$test_output" | grep -oP '/etc/ssh/[^:]+' | head -n 1)
+
+    if [[ -n "$bad_line" && -n "$bad_file" && -f "$bad_file" ]]; then
+        _log warn "尝试注释引起错误的配置行: $bad_file 第 $bad_line 行..."
+        sed -i "${bad_line}s/^/#/" "$bad_file"
+        if sshd -t >/dev/null 2>&1; then
+            _log success "语法错误已自动修正。"
+            return 0
+        fi
     fi
 
-    # 再次测试
-    sshd -t
+    return 1
 }
 
 validate_and_restart_ssh() {
+    _log info "正在对生成的完整 SSH 配置进行语法检测 (sshd -t)..."
     if ! test_and_fix_sshd_syntax; then
         _log error "新的 SSH 配置语法检查失败！"
         rollback_configs
@@ -417,7 +427,6 @@ validate_and_restart_ssh() {
     local service_name
     service_name=$(get_ssh_service_name)
 
-    # 检查并处理 Ubuntu 24.04 的 socket 机制
     handle_ubuntu_socket_activation
 
     if ! command -v systemctl >/dev/null 2>&1; then
@@ -432,7 +441,14 @@ validate_and_restart_ssh() {
         fi
     fi
 
-    if prompt_yes_no "是否立即重启 SSH 服务以应用更改？(Y/n) "; then
+    local should_restart=true
+    if [[ "$NON_INTERACTIVE" != true ]]; then
+        if ! prompt_yes_no "是否立即重启 SSH 服务以应用更改？(Y/n) "; then
+            should_restart=false
+        fi
+    fi
+
+    if [[ "$should_restart" == true ]]; then
         _log info "正在重启 SSH 服务 ($service_name)..."
         if ! systemctl restart "$service_name"; then
              _log error "SSH 服务重启失败！正在回滚配置..."
@@ -444,7 +460,6 @@ validate_and_restart_ssh() {
         sleep 1
         if systemctl is-active --quiet "$service_name"; then
             _log success "SSH 服务重启成功。"
-            # 显示当前实际监听的 SSH 端口，让运维人员确认
             if command -v ss >/dev/null 2>&1; then
                 local listening_ports
                 listening_ports=$(ss -tlpn 2>/dev/null | grep -E 'sshd|systemd' | grep -oE ':[0-9]+' | tr -d ':' | sort -un | tr '\n' ' ')
@@ -467,17 +482,36 @@ add_hardcoded_pubkey() {
     local auth_keys_file="$ssh_dir/authorized_keys"
     mkdir -p "$ssh_dir" && chmod 700 "$ssh_dir"
     touch "$auth_keys_file" && chmod 600 "$auth_keys_file"
+
+    local fp
+    fp=$(get_pubkey_fingerprint "$PUBKEY")
+    _log info "作者预设公钥指纹信息："
+    printf "  %s%s%s\n" "${color_bold}" "$fp" "${color_reset}"
+
+    if [[ "$NON_INTERACTIVE" != true ]]; then
+        if ! prompt_yes_no "确认要将作者预设公钥注入到 root 的 authorized_keys 吗？(y/N) " "n"; then
+            _log warn "用户取消了作者公钥注入。"
+            return 1
+        fi
+    fi
+
     if grep -qF -- "$PUBKEY" "$auth_keys_file"; then
         _log info "内置公钥已存在，无需重复添加。"
     else
-        if choose_overwrite_or_append "$auth_keys_file"; then
-            echo "$PUBKEY" > "$auth_keys_file"
-            _log success "内置公钥已覆盖写入。"
-        else
+        if [[ "$NON_INTERACTIVE" == true ]]; then
             echo "$PUBKEY" >> "$auth_keys_file"
             _log success "内置公钥已追加。"
+        else
+            if choose_overwrite_or_append "$auth_keys_file"; then
+                echo "$PUBKEY" > "$auth_keys_file"
+                _log success "内置公钥已覆盖写入。"
+            else
+                echo "$PUBKEY" >> "$auth_keys_file"
+                _log success "内置公钥已追加。"
+            fi
         fi
     fi
+    return 0
 }
 
 setup_custom_key() {
@@ -485,25 +519,45 @@ setup_custom_key() {
     local auth_keys_file="$ssh_dir/authorized_keys"
     mkdir -p "$ssh_dir" && chmod 700 "$ssh_dir"
     touch "$auth_keys_file" && chmod 600 "$auth_keys_file"
-    _log info "您需要配置公钥以进行密钥登录。"
-    if prompt_yes_no "您是否已经有想要使用的公钥？(Y/n) "; then
+
+    _log info "选择公钥导入方式："
+    echo "  1. 粘贴自定义公钥"
+    echo "  2. 从 GitHub 用户名拉取公钥"
+    echo "  3. 本机生成新的密钥对 (Ed25519 / RSA)"
+    local key_choice
+    read -r -p "$(printf "%s>> 请选择方式 (1-3): %s" "$color_bold" "$color_reset")" key_choice
+
+    if [[ "$key_choice" == "2" ]]; then
+        local gh_user
+        read -r -p "$(printf "%s>> 请输入 GitHub 用户名: %s" "$color_bold" "$color_reset")" gh_user
+        if [[ -z "$gh_user" ]]; then
+            _log error "用户名不能为空！"
+            return 1
+        fi
+        _log info "正在拉取 GitHub 用户 [$gh_user] 的公钥..."
+        local gh_keys
+        gh_keys=$(fetch_github_keys "$gh_user")
+        if [[ -z "$gh_keys" ]]; then
+            _log error "未拉取到有效公钥，请确认用户名或网络连接。"
+            return 1
+        fi
+        echo "$gh_keys" >> "$auth_keys_file"
+        _log success "GitHub 用户 [$gh_user] 的公钥已导入！"
+        return 0
+    elif [[ "$key_choice" == "1" ]]; then
         _log info "请直接粘贴公钥内容（一行），或多行粘贴后按 Ctrl+D 结束："
-        local pubkey
-        # 读取输入，支持单行回车直接识别或多行 cat
+        local pubkey first_line
         IFS= read -r first_line
         if [[ -n "$first_line" ]]; then
-            # 如果第一行已经是完整的有效 SSH 公钥
             if echo "$first_line" | grep -qE "^(ssh-(rsa|ed25519|dss)|ecdsa-sha2-[a-z0-9-]+|sk-(ssh|ecdsa)-[a-z0-9@.-]+)"; then
                 pubkey="$first_line"
             else
-                # 否则继续接收多行输入
                 pubkey="${first_line}"$'\n'$(cat)
             fi
         else
             pubkey=$(cat)
         fi
 
-        # 清除两端空格及 Windows 换行符 \r
         pubkey=$(echo "$pubkey" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
         if [[ -z "$pubkey" ]]; then
@@ -529,7 +583,7 @@ setup_custom_key() {
         fi
     else
         _log info "将为您生成新的密钥对。"
-        local key_type key_path key_opts choice
+        local key_type key_opts choice key_path
         read -r -p "$(printf "%s>> 请选择密钥类型 (1) Ed25519 [推荐] (2) RSA-4096: %s" "$color_bold" "$color_reset")" choice
         case "$choice" in
             2) key_type="rsa"; key_opts="-t rsa -b 4096" ;;
@@ -569,11 +623,9 @@ change_root_password() {
     fi
 }
 
-# 检测并开放防火墙端口（支持 UFW、Firewalld，并检查 SELinux）
 check_and_open_firewall_port() {
     local port="${1:-22}"
 
-    # 1. 检测与配置 UFW
     if command -v ufw >/dev/null 2>&1; then
         if ufw status | grep -q -E "Status: active"; then
             if ! ufw status | grep -qw "$port"; then
@@ -591,7 +643,6 @@ check_and_open_firewall_port() {
         fi
     fi
 
-    # 2. 检测与配置 Firewalld (CentOS/RHEL/AlmaLinux/RockyLinux/Fedora 标配)
     if command -v firewall-cmd >/dev/null 2>&1 && systemctl is-active --quiet firewalld 2>/dev/null; then
         _log info "检测到 firewalld 正在运行，正在开放端口 $port/tcp..."
         if firewall-cmd --zone=public --add-port="${port}/tcp" --permanent >/dev/null 2>&1; then
@@ -602,7 +653,6 @@ check_and_open_firewall_port() {
         fi
     fi
 
-    # 3. 检测 SELinux (防止更改端口后导致 sshd 绑定端口失败失联)
     if command -v getenforce >/dev/null 2>&1; then
         if [[ "$(getenforce)" == "Enforcing" && "$port" != "22" ]]; then
             _log warn "检测到系统启用了 SELinux 强制模式 (Enforcing)！"
@@ -635,7 +685,6 @@ modify_ssh_port() {
         return 1
     fi
 
-    # 针对 00-security.conf 进行端口设定
     if [[ -f "$DROPIN_CONF" ]]; then
         if grep -qE "^\s*Port\s+" "$DROPIN_CONF"; then
             sed -i -E "s/^\s*Port\s+.*/Port ${new_port}/" "$DROPIN_CONF"
@@ -653,15 +702,15 @@ modify_ssh_port() {
 show_help() {
     printf "用法: bash %s [选项]\n\n" "$0"
     printf "选项:\n"
-    printf "  -a, --author             使用作者预设公钥登录并禁用密码认证\n"
+    printf "  -a, --author [USER]      使用作者预设公钥（或传入 GitHub 用户名拉取）并禁用密码认证\n"
     printf "  -k, --key <PUBLIC_KEY>   导入指定公钥并禁用密码认证\n"
     printf "  -p, --port <PORT>        修改 SSH 服务端口号 (1-65535)\n"
+    printf "  -y, --yes                非交互模式，跳过所有交互提示自动执行\n"
     printf "  -h, --help               显示帮助信息\n\n"
     printf "无参数运行则进入交互式向导模式。\n"
 }
 
 main() {
-    # 优先响应帮助信息，无需 root 权限
     for arg in "$@"; do
         if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
             show_help
@@ -671,9 +720,10 @@ main() {
 
     check_root
 
-    # 处理命令行参数（支持自动化与非交互执行）
     if [[ $# -gt 0 ]]; then
+        NON_INTERACTIVE=true
         local cli_mode=""
+        local cli_author_user=""
         local cli_key=""
         local cli_port=""
 
@@ -681,7 +731,13 @@ main() {
             case "$1" in
                 -a|--author)
                     cli_mode="author"
-                    shift ;;
+                    if [[ $# -gt 1 && ! "$2" =~ ^- ]]; then
+                        cli_author_user="$2"
+                        shift 2
+                    else
+                        shift
+                    fi
+                    ;;
                 -k|--key)
                     cli_mode="custom"
                     cli_key="$2"
@@ -689,6 +745,9 @@ main() {
                 -p|--port)
                     cli_port="$2"
                     shift 2 ;;
+                -y|--yes)
+                    NON_INTERACTIVE=true
+                    shift ;;
                 *)
                     _log error "未知参数: $1"
                     show_help
@@ -709,7 +768,23 @@ main() {
         fi
 
         if [[ "$cli_mode" == "author" ]]; then
-            add_hardcoded_pubkey
+            if [[ -n "$cli_author_user" ]]; then
+                _log info "正在获取 GitHub 用户 [$cli_author_user] 的公钥..."
+                local gh_keys
+                gh_keys=$(fetch_github_keys "$cli_author_user")
+                if [[ -n "$gh_keys" ]]; then
+                    local ssh_dir="/root/.ssh"
+                    mkdir -p "$ssh_dir" && chmod 700 "$ssh_dir"
+                    echo "$gh_keys" >> "$ssh_dir/authorized_keys"
+                    chmod 600 "$ssh_dir/authorized_keys"
+                    _log success "已注入 GitHub 用户 [$cli_author_user] 的公钥。"
+                else
+                    _log warn "未获取到 GitHub 用户 [$cli_author_user] 的公钥，使用预设作者公钥。"
+                    add_hardcoded_pubkey
+                fi
+            else
+                add_hardcoded_pubkey
+            fi
             apply_security_policy "key_only" "$target_port"
         elif [[ "$cli_mode" == "custom" ]]; then
             if [[ -z "$cli_key" ]]; then
@@ -722,7 +797,6 @@ main() {
             chmod 600 "$ssh_dir/authorized_keys"
             apply_security_policy "key_only" "$target_port"
         elif [[ -n "$cli_port" ]]; then
-            # 仅修改端口
             if [[ -f "$DROPIN_CONF" ]]; then
                 sed -i -E "s/^\s*Port\s+.*/Port ${cli_port}/" "$DROPIN_CONF" 2>/dev/null || sed -i "1i Port ${cli_port}" "$DROPIN_CONF"
             fi
@@ -739,7 +813,6 @@ main() {
         exit 0
     fi
 
-    # 交互式模式
     show_header
     show_env_info
     show_status_info
@@ -760,9 +833,8 @@ main() {
         case "$choice" in
             1)
                 _log warn "您选择了作者专用模式，将使用脚本内置的公钥。"
-                if ! prompt_yes_no "确认继续吗？(Y/n) "; then continue; fi
                 backup_configs
-                add_hardcoded_pubkey
+                if ! add_hardcoded_pubkey; then continue; fi
                 port=$(get_sshd_config_value "port")
                 [[ -z "$port" ]] && port="22"
                 apply_security_policy "key_only" "$port"
