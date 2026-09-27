@@ -5,16 +5,21 @@
 # 功能:     优化与美化 Linux 终端体验，支持主流发行版。
 # 作者:     rouxyang (原始作者) / Gemini (优化) / Silentely (改进)
 # 创建日期: 2025-04-13
-# 最后更新: 2025-06-08
+# 最后更新: 2026-09-27
 # 许可证:   MIT
 # 项目地址: https://github.com/Silentely/Demo
 # ==============================================================================
 
 # --- 全局变量 ---
-SCRIPT_VERSION="0.0.2"
+SCRIPT_VERSION="0.0.3"
 readonly LOG_FILE="/tmp/terminal_optimizer.log"
 UNINSTALL=false
 FORCE=false
+
+# 管道输入兼容
+if [[ ! -t 0 ]] && { true < /dev/tty; } 2>/dev/null; then
+    exec < /dev/tty 2>/dev/null || true
+fi
 
 # 引入通用函数库
 if [ -f "../lib/common.sh" ]; then
@@ -273,18 +278,15 @@ fi
 
 #    - 设置 PS1
 if declare -f __git_ps1 &>/dev/null; then
-    GIT_PS1_SHOWDIRTYSTATE=1      # '
+    GIT_PS1_SHOWDIRTYSTATE=1      # '*'
     GIT_PS1_SHOWSTASHSTATE=1    # '$'
     GIT_PS1_SHOWUNTRACKEDFILES=1 # '%'
-    # 单行提示符，移除了 '\n'
-    PS1='\[\033[0;32m\]\u@\h\[\033[0m\]:\[\033[0;34m\]\w\[\033[0;33m\]\$(__git_ps1 " (%s)")\[\033[0m\]\$ '
+    # 单行提示符
+    PS1='\\[\\033[0;32m\\]\\u@\\h\\[\\033[0m\\]:\\[\\033[0;34m\\]\\w\\[\\033[0;33m\\]\\$(__git_ps1 " (%s)")\\[\\033[0m\\]\\$ '
 else
     # 不带 Git 功能的 PS1
-    PS1='\[\033[0;32m\]\u@\h\[\033[0m\]:\[\033[0;34m\]\w\[\033[0m\]\$ '
+    PS1='\\[\\033[0;32m\\]\\u@\\h\\[\\033[0m\\]:\\[\\033[0;34m\\]\\w\\[\\033[0m\\]\\$ '
 fi
-# 如果想要两行显示，恢复下面这行:
-# PS1='\[\033[0;32m\]\u@\h:\w\$(__git_ps1 " (%s)")\n\[\033[0m\]\$ '
-
 
 # 2. 历史命令优化
 export HISTCONTROL=ignoredups:erasedups # 忽略重复和清除旧的重复项
@@ -307,7 +309,7 @@ alias ..='cd ..'
 alias ...='cd ../..'
 
 # 4. 其它设置
-export EDITOR=vim # 将默认编辑器设置为 vim，可以改为 nano
+export EDITOR=vim # 将默认编辑器设置为 vim
 
 # --- 配置结束 ---
 EOF
@@ -318,7 +320,6 @@ EOF
     # 4. 在 .bashrc 中引用自定义配置
     if ! grep -q "source $CUSTOM_CONFIG_FILE" "$BASHRC_FILE"; then
         log "INFO" "在 $BASHRC_FILE 中添加对自定义配置的引用。"
-        # 在文件末尾追加引用
         echo -e "\n# 加载终端优化配置\nif [ -f \"\$HOME/.terminal_optimizer.sh\" ]; then\n    . \"\$HOME/.terminal_optimizer.sh\"\nfi" >> "$BASHRC_FILE"
     else
         log "INFO" "自定义配置引用已存在于 $BASHRC_FILE。"
@@ -334,7 +335,6 @@ cleanup_and_restore() {
     # 1. 移除 .bashrc 中的引用
     if [[ -f "$BASHRC_FILE" ]]; then
         log "INFO" "从 $BASHRC_FILE 中移除配置引用..."
-        # 使用 sed 原地删除相关代码块
         sed -i '/# 加载终端优化配置/,/fi/d' "$BASHRC_FILE"
     fi
 
@@ -346,7 +346,10 @@ cleanup_and_restore() {
 
     # 3. 还原备份 (可选)
     if [[ -f "${BASHRC_FILE}.bak_optimizer" ]]; then
-        read -p "找到 .bashrc 的备份文件，是否要用它覆盖当前文件? (y/N): " -r reply
+        local reply="y"
+        if [[ "$FORCE" != "true" ]]; then
+            read -p "找到 .bashrc 的备份文件，是否要用它覆盖当前文件? (y/N): " -r reply
+        fi
         if [[ "$reply" =~ ^[Yy]$ ]]; then
             log "INFO" "正在从备份还原 $BASHRC_FILE..."
             mv "${BASHRC_FILE}.bak_optimizer" "$BASHRC_FILE"
@@ -362,14 +365,24 @@ cleanup_and_restore() {
 # 主逻辑
 # ==============================================================================
 main() {
-    # 脚本开始，记录日志
     echo "==================== $(date) ====================" >> "$LOG_FILE"
     log "INFO" "终端优化脚本 v$SCRIPT_VERSION 启动。"
     
-    # 核心流程
     check_root
     detect_os
     detect_target_user
+
+    # 如果通过命令行参数指定了卸载
+    if [[ "$UNINSTALL" == "true" ]]; then
+        cleanup_and_restore
+        return
+    fi
+
+    # 如果通过命令行参数指定了强制安装
+    if [[ "$FORCE" == "true" ]]; then
+        configure_bash
+        return
+    fi
 
     # 主菜单
     echo -e "\n${CYAN}欢迎使用终端优化脚本!${NC}"
@@ -398,9 +411,6 @@ main() {
     esac
 
     log "INFO" "操作完成。"
-    echo -e "\n${GREEN}✅ 操作完成！请重新登录或运行 'source ${BASHRC_FILE}' 来使配置生效。${NC}"
-    echo -e "日志文件位于: ${LOG_FILE}"
 }
 
-# --- 脚本执行入口 ---
 main "$@"
