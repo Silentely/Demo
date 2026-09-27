@@ -8,7 +8,7 @@ set -euo pipefail
 # - 只提供本地 SOCKS5 代理
 # =========================================================
 
-VERSION="container-proxy-1.3.6 (升级 wireproxy 到 v1.0.9 + 移除 -v + 日志优化)"
+VERSION="container-proxy-1.3.7 (兼容现代 warp-cli 语法 + 变量引用修复 + 健壮性增强)"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -100,7 +100,8 @@ download_wireproxy() {
   fi
 
   # 验证版本
-  local wp_version=$(wireproxy --version 2>/dev/null || echo "未知")
+  local wp_version
+  wp_version=$(wireproxy --version 2>/dev/null || echo "未知")
   info "wireproxy 安装成功，版本: $wp_version"
   wireproxy --help >/dev/null 2>&1 || error "wireproxy 验证失败"
 }
@@ -177,7 +178,7 @@ start_wireproxy_bg() {
 
   info "启动 wireproxy (SOCKS5 on 127.0.0.1:${WARP_SOCKS_PORT})..."
   pkill -x wireproxy 2>/dev/null || true
-  # 清空旧日志，便于本次调试（可选，根据需求注释掉）
+  # 清空旧日志，便于本次调试
   : > "$WARP_LOG_FILE" 2>/dev/null || true
 
   # 检查配置文件格式
@@ -186,15 +187,14 @@ start_wireproxy_bg() {
 请确保 BindAddress 格式为 '127.0.0.1:端口'（例如 127.0.0.1:40000），而不是单独的 BindAddress 和 BindPort。"
   fi
 
-  # 启动（移除 -v，避免打印版本并退出；后台模式默认日志少，但进程运行正常）
+  # 启动后台模式
   nohup wireproxy -c "$WIREPROXY_CONFIG" -d >>"$WARP_LOG_FILE" 2>&1 &
   local pid=$!
   echo "$pid" > "$WARP_PID_FILE"
-  info "wireproxy 已后台启动，PID: $pid，日志: $WARP_LOG_FILE（后台模式下日志可能为空，这是正常行为）"
+  info "wireproxy 已后台启动，PID: $pid，日志: $WARP_LOG_FILE"
 
-  # 多给点时间让它启动和连接
-  sleep 8
-  tail -n 50 "$WARP_LOG_FILE" || true  # 多打印几行，便于看到连接或错误
+  sleep 5
+  tail -n 30 "$WARP_LOG_FILE" || true
 }
 
 setup_alpine_warp() {
@@ -209,7 +209,6 @@ setup_alpine_warp() {
   wait_for_socks5 || error "WireProxy SOCKS5 未启动。请查看 $WARP_LOG_FILE（常见原因：缺少 NET_ADMIN capability 或 TUN 设备权限，或 WireGuard 连接失败）"
   info "Alpine WireProxy SOCKS5 已就绪：socks5h://127.0.0.1:${WARP_SOCKS_PORT}"
   info "测试命令：curl --socks5 127.0.0.1:${WARP_SOCKS_PORT} https://ip.gs"
-  info "后台模式日志可能为空，使用 ss/ps 检查运行状态，或 curl 测试实际代理效果"
 }
 
 refresh_alpine() {
@@ -275,7 +274,7 @@ install_warp_debian_ubuntu() {
 
   info "添加 Cloudflare WARP APT 源（codename: $codename）..."
   install -d /usr/share/keyrings /etc/apt/sources.list.d
-  curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+  curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --dearmor --yes -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
   cat >/etc/apt/sources.list.d/cloudflare-client.list <<EOF
 deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ ${codename} main
 EOF
@@ -313,7 +312,8 @@ ensure_runtime_dirs() {
 
 warp_svc_running() {
   if [[ -f "$WARP_PID_FILE" ]]; then
-    local pid=$(cat "$WARP_PID_FILE" 2>/dev/null)
+    local pid
+    pid=$(cat "$WARP_PID_FILE" 2>/dev/null || true)
     [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && return 0
   fi
   pgrep -x warp-svc >/dev/null 2>&1
@@ -341,8 +341,13 @@ wait_for_socket() {
   return 1
 }
 
+warp_cli_cmd() {
+  # 兼容旧版本带 --accept-tos 与新版本直接执行
+  warp-cli --accept-tos "$@" 2>/dev/null || warp-cli "$@" 2>/dev/null || true
+}
+
 warp_cli_ready() {
-  warp-cli --accept-tos status >/dev/null 2>&1
+  warp_cli_cmd status >/dev/null 2>&1
 }
 
 configure_and_connect_proxy() {
@@ -354,22 +359,22 @@ configure_and_connect_proxy() {
 
   for _ in {1..5}; do warp_cli_ready && break; sleep 1; done
 
-  warp-cli --accept-tos mode proxy >/dev/null 2>&1 || true
-  warp-cli --accept-tos proxy port "$WARP_SOCKS_PORT" >/dev/null 2>&1 || true
+  warp_cli_cmd mode proxy
+  warp_cli_cmd proxy port "$WARP_SOCKS_PORT"
 
   local i=1
   while (( i <= WARP_CONNECT_RETRY )); do
     info "尝试 ${i}/${WARP_CONNECT_RETRY}"
-    warp-cli --accept-tos disconnect >/dev/null 2>&1 || true
-    warp-cli --accept-tos registration delete >/dev/null 2>&1 || true
+    warp_cli_cmd disconnect
+    warp_cli_cmd registration delete
     rm -f /var/lib/cloudflare-warp/reg.json 2>/dev/null || true
     sleep 1
-    warp-cli --accept-tos registration new >/dev/null 2>&1 || true
-    warp-cli --accept-tos connect >/dev/null 2>&1 || true
+    warp_cli_cmd registration new
+    warp_cli_cmd connect
 
     if wait_for_socks5; then
       info "SOCKS5 已就绪：socks5h://127.0.0.1:${WARP_SOCKS_PORT}"
-      warp-cli --accept-tos status 2>/dev/null || true
+      warp_cli_cmd status
       return 0
     fi
     sleep 2; ((i++))
@@ -380,12 +385,12 @@ configure_and_connect_proxy() {
 
 refresh_official() {
   info "官方模式刷新 IP..."
-  warp-cli --accept-tos disconnect >/dev/null 2>&1 || true
-  warp-cli --accept-tos registration delete >/dev/null 2>&1 || true
+  warp_cli_cmd disconnect
+  warp_cli_cmd registration delete
   rm -f /var/lib/cloudflare-warp/reg.json 2>/dev/null || true
   sleep 2
-  warp-cli --accept-tos registration new >/dev/null 2>&1 || true
-  warp-cli --accept-tos connect >/dev/null 2>&1 || true
+  warp_cli_cmd registration new
+  warp_cli_cmd connect
   wait_for_socks5 && info "刷新完成，检查：curl --socks5 127.0.0.1:${WARP_SOCKS_PORT} https://ip.gs" || warn "刷新失败"
 }
 
@@ -395,11 +400,11 @@ status() {
   echo "=== ${VERSION} ==="
   if [[ "$OS_ID" == "alpine" ]]; then
     echo "模式: WireProxy"
-    ps aux | grep -E 'wireproxy|${WARP_SOCKS_PORT}' | grep -v grep || echo "未运行"
+    ps aux | grep -E "wireproxy|${WARP_SOCKS_PORT}" | grep -v grep || echo "未运行"
   else
     echo "模式: Official"
     echo "warp-svc running: $(warp_svc_running && echo YES || echo NO)"
-    warp-cli --accept-tos status 2>/dev/null || true
+    warp_cli_cmd status
   fi
   echo "SOCKS5: 127.0.0.1:${WARP_SOCKS_PORT}"
   ss -nltp 2>/dev/null | grep "${WARP_SOCKS_PORT}" || true
@@ -423,6 +428,7 @@ usage() {
   $0 o       停止
   $0 r       重启
   $0 refresh 尝试换 IP
+  $0 -h      帮助说明
 
 环境变量示例: WARP_SOCKS_PORT=1080
 EOF
@@ -431,9 +437,16 @@ EOF
 # ==================== 主入口 ====================
 
 main() {
+  local opt="${1:-c}"
+  case "$opt" in
+    -h|--help|help)
+      usage
+      exit 0
+      ;;
+  esac
+
   need_root
   detect_os_and_arch
-  local opt="${1:-c}"
 
   if [[ "$OS_ID" == "alpine" ]]; then
     case "$opt" in

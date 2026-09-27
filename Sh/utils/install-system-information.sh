@@ -45,7 +45,7 @@ check_and_install_deps() {
 
 # 检测 IP 地址并设置 GitHub 镜像
 set_github_mirror() {
-    echo -e "${CYAN}🌍 正在检测网络环境...${NC}"
+    echo -e "${CYAN}🌐 正在检测网络环境...${NC}"
     local country_code
     country_code=$(curl -s --connect-timeout 5 https://ipinfo.io/country || echo "")
 
@@ -85,7 +85,6 @@ configure_fastfetch() {
 setup_profile_script() {
     local tool_name=$1
     echo -e "${CYAN}🔧 正在配置 ${tool_name} 开机启动...${NC}"
-    # 将脚本内容写入文件，并将终端输出重定向到 /dev/null，避免不美观的输出
     echo -e "#!/bin/sh\n${tool_name}" | sudo tee "/etc/profile.d/${tool_name}.sh" > /dev/null
     sudo chmod +x "/etc/profile.d/${tool_name}.sh"
     echo -e "${GREEN}✅ 开机启动配置完成。${NC}"
@@ -137,7 +136,7 @@ fi
 
 
 # --- 适用于 Debian 12+ 或其他系统的标准逻辑 ---
-project_name="LinusDierheimer/fastfetch"
+project_name="fastfetch-cli/fastfetch"
 
 # 尝试从 apt 安装
 if apt-cache show fastfetch &>/dev/null; then
@@ -218,12 +217,12 @@ fi
 echo -e "${GREEN}✅ 下载完成。准备安装...${NC}"
 
 if [ "$EUID" -ne 0 ]; then
-    sudo dpkg -i "${release_name}"
+    sudo dpkg -i "${release_name}" || sudo apt-get install -f -y
 else
-    dpkg -i "${release_name}"
+    dpkg -i "${release_name}" || apt-get install -f -y
 fi
 
-rm "${release_name}"
+rm -f "${release_name}"
 configure_fastfetch
 setup_profile_script "fastfetch"
 echo -e "${GREEN}🎉 fastfetch 安装/更新完成！${NC}"

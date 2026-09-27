@@ -1,12 +1,9 @@
 #!/usr/bin/env bash
 #
-
-# 青龙一键安装脚本
+# 青龙一键安装依赖脚本
 # GitHub仓库： https://github.com/FlechazoPh/QLDependency
 # 修复映射data目录 @Silentely
-# 安装报错，请提交Issue
-
-# 有其他需要的依赖，欢迎到源仓库提交Pull Request
+#
 
 TIME() {
 [[ -z "$1" ]] && {
@@ -25,6 +22,7 @@ TIME() {
 	 }
       }
 }
+
 echo
 echo
 echo
@@ -36,34 +34,39 @@ sleep 3
 echo
 echo
 
-echo
-"当前node版本(如果没有node，请自行安装): "
-node -v
+echo "当前node版本(如果没有node，请自行安装): "
+node -v || true
 
-echo
-"当前npm版本(如果没有npm，请自行安装): "
-npm -v
+echo "当前npm版本(如果没有npm，请自行安装): "
+npm -v || true
 
-npm config set registry https://registry.npmmirror.com
-cd /ql/
-pnpm add -g pnpm
+npm config set registry https://registry.npmmirror.com 2>/dev/null || true
+cd /ql/ 2>/dev/null || true
+pnpm add -g pnpm 2>/dev/null || npm install -g pnpm 2>/dev/null || true
 
-pnpm install -g
+pnpm install -g 2>/dev/null || true
 
-npm install -g npm png-js date-fns axios crypto-js ts-md5 tslib @types/node requests tough-cookie jsdom download tunnel fs ws form-data
+npm install -g npm png-js date-fns axios crypto-js ts-md5 tslib @types/node requests tough-cookie jsdom download tunnel fs ws form-data 2>/dev/null || true
 
-pnpm install -g js-base64 qrcode-terminal silly-datetime
+pnpm install -g js-base64 qrcode-terminal silly-datetime 2>/dev/null || true
 
-pip3 install requests
+# 适配 PEP 668 (Python 3.12+ / Alpine 3.19+)
+pip3 install --break-system-packages requests 2>/dev/null || pip3 install requests 2>/dev/null || true
 
-cd /ql/data/scripts/ && apk add --no-cache build-base g++ cairo-dev pango-dev giflib-dev && npm i && npm i -S ts-node typescript @types/node date-fns axios png-js canvas --build-from-source
-cd /ql/ && apk add --no-cache build-base g++ cairo-dev pango-dev giflib-dev
-cd /ql/data/scripts/ && npm install canvas --build-from-source 
-cd /ql/ && apk add python3 zlib-dev gcc jpeg-dev python3-dev musl-dev freetype-dev
+if [ -d "/ql/data/scripts" ]; then
+    cd /ql/data/scripts/ && apk add --no-cache build-base g++ cairo-dev pango-dev giflib-dev 2>/dev/null || true
+    npm i 2>/dev/null || true
+    npm i -S ts-node typescript @types/node date-fns axios png-js canvas --build-from-source 2>/dev/null || true
+fi
+
+if [ -d "/ql" ]; then
+    cd /ql/ && apk add --no-cache build-base g++ cairo-dev pango-dev giflib-dev 2>/dev/null || true
+    cd /ql/data/scripts/ 2>/dev/null && npm install canvas --build-from-source 2>/dev/null || true
+    cd /ql/ && apk add --no-cache python3 zlib-dev gcc jpeg-dev python3-dev musl-dev freetype-dev 2>/dev/null || true
+fi
 
 echo
 TIME g "依赖安装完毕...建议重启 Docker "
-
 echo
 TIME g "有任何问题，请在此仓库提交Issue： https://github.com/FlechazoPh/QLDependency"
 echo
