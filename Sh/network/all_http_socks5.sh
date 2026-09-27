@@ -1,105 +1,126 @@
 #!/bin/bash
+# ==============================================================================
+# 脚本名称: all_http_socks5.sh
+# 功能:     HTTP (Squid) + SOCKS5 (Dante) 双代理一键部署
+# ==============================================================================
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+PROXY_USER="${PROXY_USER:-test1}"
+PROXY_PASS="${PROXY_PASS:-gt54321}"
+HTTP_PORT="${HTTP_PORT:-25562}"
+SOCKS5_PORT="${SOCKS5_PORT:-25543}"
+
 install_http() {
-    
-  sudo apt-get install squid #安装http代理
-  sudo apt-get install apache2-utils #安装密码工具
-  cat <<EOF >/etc/squid/squid.conf
-#
+  echo "正在安装 Squid HTTP 代理及认证工具..."
+  if command -v apt-get &>/dev/null; then
+    sudo apt-get update -y
+    sudo apt-get install -y squid apache2-utils
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y squid httpd-tools
+  elif command -v yum &>/dev/null; then
+    sudo yum install -y squid httpd-tools
+  fi
+
+  # 检测 basic_ncsa_auth 路径
+  local auth_bin=""
+  for bin_path in \
+    /usr/lib/squid/basic_ncsa_auth \
+    /usr/lib64/squid/basic_ncsa_auth \
+    /usr/lib/squid3/basic_ncsa_auth \
+    /usr/libexec/squid/basic_ncsa_auth; do
+    if [[ -x "$bin_path" ]]; then
+      auth_bin="$bin_path"
+      break
+    fi
+  done
+  [[ -z "$auth_bin" ]] && auth_bin="/usr/lib/squid/basic_ncsa_auth"
+
+  # 生成认证密码文件
+  echo "正在配置 HTTP 代理认证..."
+  sudo mkdir -p /etc/squid
+  sudo htpasswd -b -c /etc/squid/passwd "$PROXY_USER" "$PROXY_PASS"
+  sudo chmod 644 /etc/squid/passwd
+
+  echo "正在写入 Squid 配置文件..."
+  cat <<EOF | sudo tee /etc/squid/squid.conf >/dev/null
 # Recommended minimum configuration:
-#
 acl manager proto cache_object
 acl localhost src 127.0.0.1/32 ::1
 acl to_localhost dst 127.0.0.0/8 0.0.0.0/32 ::1
 
-# Example rule allowing access from your local networks.
-# Adapt to list your (internal) IP networks from where browsing
-# should be allowed
-acl localnet src 10.0.0.0/8    # RFC1918 possible internal network
-acl localnet src 172.16.0.0/12    # RFC1918 possible internal network
-acl localnet src 192.168.0.0/16    # RFC1918 possible internal network
-acl localnet src fc00::/7       # RFC 4193 local private network range
-acl localnet src fe80::/10      # RFC 4291 link-local (directly plugged) machines
+acl localnet src 10.0.0.0/8
+acl localnet src 172.16.0.0/12
+acl localnet src 192.168.0.0/16
+acl localnet src fc00::/7
+acl localnet src fe80::/10
 
 acl SSL_ports port 443
-acl Safe_ports port 80        # http
-acl Safe_ports port 21        # ftp
-acl Safe_ports port 443        # https
-acl Safe_ports port 70        # gopher
-acl Safe_ports port 210        # wais
-acl Safe_ports port 1025-65535    # unregistered ports
-acl Safe_ports port 280        # http-mgmt
-acl Safe_ports port 488        # gss-http
-acl Safe_ports port 591        # filemaker
-acl Safe_ports port 777        # multiling http
+acl Safe_ports port 80
+acl Safe_ports port 21
+acl Safe_ports port 443
+acl Safe_ports port 70
+acl Safe_ports port 210
+acl Safe_ports port 1025-65535
+acl Safe_ports port 280
+acl Safe_ports port 488
+acl Safe_ports port 591
+acl Safe_ports port 777
 acl CONNECT method CONNECT
 
-#
-# Recommended minimum Access Permission configuration:
-#
-# Only allow cachemgr access from localhost
 http_access allow manager localhost
 http_access deny manager
-
-# Deny requests to certain unsafe ports
 http_access deny !Safe_ports
-
-# Deny CONNECT to other than secure SSL ports
 http_access deny CONNECT !SSL_ports
 
-# We strongly recommend the following be uncommented to protect innocent
-# web applications running on the proxy server who think the only
-# one who can access services on "localhost" is a local user
-#http_access deny to_localhost
-
-#
-# INSERT YOUR OWN RULE(S) HERE TO ALLOW ACCESS FROM YOUR CLIENTS
-#
-
-# Example rule allowing access from your local networks.
-# Adapt localnet in the ACL section to list your (internal) IP networks
-# from where browsing should be allowed
-http_access allow localnet
-#http_access allow localhost
-
-# And finally deny all other access to this proxy
-#http_access deny all
-http_access allow all
-
-# Squid normally listens to port 3128
-#http_port 3128
-http_port 25562
-via off
-forwarded_for delete
-auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
+# 认证配置
+auth_param basic program $auth_bin /etc/squid/passwd
 acl auth_user proxy_auth REQUIRED
 http_access allow auth_user
+http_access deny all
 
-# We recommend you to use at least the following line.
-hierarchy_stoplist cgi-bin ?
+http_port $HTTP_PORT
+via off
+forwarded_for delete
 
-# Uncomment and adjust the following to add a disk cache directory.
-#cache_dir ufs /var/spool/squid 100 16 256
-
-# Leave coredumps in the first cache dir
 coredump_dir /var/spool/squid
-
-# Add any of your own refresh_pattern entries above these.
 refresh_pattern ^ftp:        1440    20%    10080
-refresh_pattern ^gopher:    1440    0%    1440
-refresh_pattern -i (/cgi-bin/|\?) 0    0%    0
-refresh_pattern .        0    20%    4320
+refresh_pattern ^gopher:     1440    0%     1440
+refresh_pattern -i (/cgi-bin/|\\?) 0 0%     0
+refresh_pattern .            0       20%    4320
 EOF
-  systemctl start squid          #开启squid
-  systemctl restart squid          #重启squid
-  systemctl enable squid.service   #设置开机自动启动
+
+  echo "正在启动 Squid 服务..."
+  sudo systemctl restart squid || sudo systemctl restart squid.service
+  sudo systemctl enable squid || sudo systemctl enable squid.service
+  echo "Squid HTTP 代理部署完成，监听端口: $HTTP_PORT"
 }
+
 install_socks5() {
-    
-  wget --no-check-certificate https://raw.githubusercontent.com/Silentely/Demo/main/Sh/socks5_install.sh -O socks5_install.sh
-  bash socks5_install.sh --port=25543 --user=test1 --passwd=gt54321
+  echo "正在部署 SOCKS5 代理..."
+  local socks5_script=""
+  if [[ -f "$SCRIPT_DIR/socks5_install.sh" ]]; then
+    socks5_script="$SCRIPT_DIR/socks5_install.sh"
+  elif [[ -f "./socks5_install.sh" ]]; then
+    socks5_script="./socks5_install.sh"
+  else
+    socks5_script="/tmp/socks5_install.sh"
+    curl -fsSL "https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/socks5_install.sh" -o "$socks5_script" || \
+    wget -qO "$socks5_script" "https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/socks5_install.sh"
+  fi
+  chmod +x "$socks5_script"
+  bash "$socks5_script" --port="$SOCKS5_PORT" --user="$PROXY_USER" --passwd="$PROXY_PASS"
+  echo "SOCKS5 代理部署完成，监听端口: $SOCKS5_PORT"
 }
+
 install_http
 install_socks5
-cd /etc/squid
-wget https://raw.githubusercontent.com/Silentely/Demo/main/Sh/passwd
 
+echo "============================================================"
+echo " 代理部署完成！"
+echo " HTTP 代理端口:   $HTTP_PORT"
+echo " SOCKS5 代理端口: $SOCKS5_PORT"
+echo " 认证用户名:     $PROXY_USER"
+echo " 认证密码:       $PROXY_PASS"
+echo "============================================================"
