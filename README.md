@@ -17,7 +17,7 @@
 </p>
 
 > **🔧 纯自用，佛系维护，如果有任何问题，请自己解决 🔧**
-> **🕙 最后更新: 2025-12-14**
+> **🕙 最后更新: 2026-09-27**
 
 ---
 
@@ -49,11 +49,11 @@ Demo/
 │   ├── system/      # 系统相关脚本 (清理、优化、NAT64等)
 │   ├── network/     # 网络相关脚本 (代理、防火墙等)
 │   ├── docker/      # Docker相关脚本 (安装、证书)
-│   └── utils/       # 通用工具脚本 (备份、SSH等)
+│   └── utils/       # 通用工具脚本 (备份、SSH密钥加固等)
 ├── Action/          # GitHub Actions 工作流模板
 ├── Work/            # Cloudflare Workers 脚本
 ├── py/              # Python脚本
-├── tiku/            # 题库格式转换工具 (新增)
+├── tiku/            # 题库格式转换工具
 ├── lib/             # 公共库文件
 ├── docs/            # 项目文档
 ├── CLAUDE.md        # AI上下文索引文档
@@ -61,143 +61,28 @@ Demo/
 └── README.md        # 项目说明文件
 ```
 
-其中 `Sh/` 目录包含了大部分实用的Shell脚本工具，涵盖了系统优化、网络配置、环境安装等多个方面。
+---
 
 ## 🚀 快速开始
 
 选择您需要的脚本并直接运行：
 
 ```bash
-# 示例：运行系统清理脚本
+# 示例：运行系统垃圾深度清理脚本
 bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/cleanup.sh)
+
+# 示例：SSH 密钥加固一键配置 (支持指定 GitHub 用户公钥与自定义端口)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/ssh_key.sh) -a Silentely
 
 # 示例：运行Docker安装脚本
 bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/docker/DockerInstallation.sh)
 ```
 
-查看 [使用示例文档](docs/examples.md) 获取更多详细使用方法。
+---
 
 ## 📚 Shell脚本使用说明
 
-### 🔐 install-system-information.sh
-**脚本概述**: 
-```
-╭──────────────────────────────────────────╮
-│    系统信息美化工具 FastFetch 自动安装   │
-╰──────────────────────────────────────────╯
-```
-**功能**: 
-- 🔍 自动检测系统架构并选择合适的安装包
-- 🌐 智能判断中国大陆网络环境，使用镜像加速下载
-- 🎨 自动配置美观的系统信息显示界面
-- 🔄 为Debian 11提供neofetch替代方案
-- 📋 显示系统详细硬件与软件信息，美化登录界面
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/install-system-information.sh)
-```
-
-### 🇨🇳 LocaleCN.sh - 简体中文环境设置工具
-**脚本概述**: 
-```
- ______     __  __     __     __   __     ______     ______     ______    
-/\  ___\   /\ \_\ \   /\ \   /\ "-.\ \   /\  ___\   /\  ___\   /\  ___\   
-\ \ \____  \ \  __ \  \ \ \  \ \ \-.  \  \ \  __\   \ \___  \  \ \  __\   
- \ \_____\  \ \_\ \_\  \ \_\  \ \_\\"\_\  \ \_____\  \/\_____\  \ \_____\ 
-  \/_____/   \/_/\/_/   \/_/   \/_/ \/_/   \/_____/   \/_____/   \/_____/ 
-```
-**功能**: 
-- 🇨🇳 一键设置系统全局语言环境为简体中文
-- 🖥️ 支持各种主流Linux发行版（CentOS、Debian、Ubuntu等）
-- 🔄 自动备份原有语言配置，确保操作安全
-- 📦 智能安装必要的中文语言包
-- 🛠️ 自动处理各发行版的配置文件差异
-- 🚫 适配不同操作系统的安装方式，自动处理异常情况
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/LocaleCN.sh)
-```
-
-**支持参数**:
-- `-h, --help`  help 显示帮助信息
-- `-f, --force` 💪 强制执行，不进行确认提示
-
-### 🌍 gost.sh
-**脚本概述**: 
-```
-┌─────────────────────────┐
-│  Gost代理服务器安装脚本 │
-└─────────────────────────┘
-```
-**功能**: 自动检测系统环境、获取最新版本的Gost并进行安装
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/gost.sh)
-```
-
-### 💾 dd-od.sh
-**脚本概述**: 
-```
-╔═══════════════════╗
-║  系统重装神器     ║
-╚═══════════════════╝
-```
-**功能**: 支持多种Linux发行版和Windows系统的一键网络重装
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/dd-od.sh)
-```
-
-### 🧹 cleanup.sh - 系统垃圾清理加速器
-**脚本概述**: 
-```
-⚡️ 系统垃圾清理加速器 ⚡️
-```
-**功能**: 
-- 🗑️ 清理系统缓存、日志、临时文件等，释放磁盘空间
-- 📊 显示清理前后的磁盘使用情况
-- 🛡️ 安全操作，避免误删重要文件
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/cleanup.sh)
-```
-
-**支持参数**:
-- `-h, --help`  help 显示帮助信息
-- `-v, --verbose` 📢 详细输出模式
-- `-y, --yes` ✅ 自动确认所有操作
-
-### 🎨 terminal_optimizer.sh - 终端优化美化脚本
-**脚本概述**: 
-```
-╔════════════════════════════════════════════╗
-║   终端优化美化脚本（Terminal Optimizer）  ║
-```
-**功能**:
-- 🖥️ 优化与美化 Linux 终端体验
-- 🛠️ 自动检测主流发行版和包管理器
-- 🔧 快速配置炫酷 PS1、Git 集成与常用别名
-- 📝 历史命令增强，提升效率
-- 🧹 一键还原、无残留
-- 👤 支持 root 和普通用户
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/terminal_optimizer.sh)
-```
-
-**支持参数**:
-- `-h, --help`  help 显示帮助信息
-- `-v, --version` 🔢 显示脚本版本
-- `-u, --uninstall` 🔙 恢复到原始配置
-- `-f, --force` 💪 强制执行，不进行确认提示
-
-### 🔑 ssh_key.sh
+### 🔑 ssh_key.sh - SSH 密钥加固与端口管理
 **脚本概述**: 
 ```
  ___ ___ _  _   _  _____   __
@@ -207,103 +92,32 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
                           \__/
 ```
 **功能**: 
-- 🛡️ 配置SSH密钥登录
-- 🔒 管理SSH安全设置
-- 🔧 支持多种登录方式配置
+- 🛡️ **安全防覆盖**: 写入 `/etc/ssh/sshd_config.d/00-security.conf`，利用 OpenSSH 规则“首个出现值生效”特性，防止 VPS 云厂商自带配置覆盖 `PasswordAuthentication no`
+- ⚡ **Ubuntu 24.04+ 完美适配**: 自动处理 `ssh.socket` 机制，改端口平滑过渡至守护进程服务，防止修改非标端口后无法监听失联
+- 🔧 **支持 CLI 命令行选项**: 支持无交互快速注入公钥与调优
+- 🔄 **自动安全回滚**: 修改前后语法检查，校验失败毫秒级自动还原，保留最近 5 份轮转备份
 
 **使用方法**:
 ```bash
+# 交互式菜单运行
 bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/ssh_key.sh)
-```
 
-### 💫 swap.sh - Swap分区管理工具
-**脚本概述**: 
-```
- ____  _      ___    ____  
-/ ___|| |    / _ \  |  _ \ 
-\___ \| |   | | | | | |_) |
- ___) | |___| |_| | |  __/ 
-|____/|_____|\__\_\ |_|    
-```
-**功能**: 
-- ➕ 一键添加swap分区
-- ➖ 一键删除swap分区
-- 📏 自定义swap大小
-- 🛡️ 检测OpenVZ虚拟化环境兼容性
+# 命令行一键非交互运行 (指定 GitHub 开发者用户名)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/ssh_key.sh) -a Silentely
 
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/swap.sh)
+# 指定端口与公钥
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/ssh_key.sh) -p 2222 -a Silentely
 ```
 
 **支持参数**:
-- `-h, --help`  help 显示帮助信息
+- `-a, --author <username>` 拉取 GitHub 用户公钥并配置
+- `-k, --key "<pubkey>"` 直接追加指定的公钥内容
+- `-p, --port <port>` 修改 SSH 端口并自动放行防火墙
+- `-h, --help` 显示帮助信息 (无需 root 权限)
 
-### 🌐 nat64_optimizer.sh - NAT64/DNS64 自动优选工具
-**脚本概述**:
-```
-╭──────────────────────────────────────────╮
-│    NAT64/DNS64 自动优选脚本              │
-╰──────────────────────────────────────────╯
-```
-**功能**:
-- 🔍 自动从多个源获取NAT64/DNS64服务器列表
-- 📊 智能测试延迟并选择最佳服务器
-- ⚙️ 自动配置系统DNS和systemd-resolved
-- 🔄 支持自动应用或交互式确认
-- 📝 详细的日志记录和错误处理
+---
 
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/nat64_optimizer.sh)
-```
-
-**支持参数**:
-- `-a, --auto-apply` 🤖 自动应用最佳DNS64，无需交互
-- `-c, --count <N>` 📊 每台服务器发送的ping次数（默认：4）
-- `-t, --timeout <sec>` ⏱️ ping命令整体超时秒数（默认：5）
-- `-h, --help` ❓ 显示帮助信息
-
-### 🔄 all_http_socks5.sh - HTTP与SOCKS5代理一键部署
-**脚本概述**:
-```
-┌─────────────────────────┐
-│  代理服务器一键部署工具  │
-└─────────────────────────┘
-```
-**功能**:
-- 🌐 自动安装和配置Squid HTTP代理（端口25562）
-- 🔐 配置HTTP代理认证
-- 🧦 自动安装SOCKS5代理（端口25543）
-- 📦 一键完成双代理部署
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/all_http_socks5.sh)
-```
-
-### 🧦 socks5_install.sh - Dante SOCKS5服务器安装
-**脚本概述**:
-```
-Dante Socks5 Server AutoInstall
-```
-**功能**:
-- 🔧 自动检测系统类型（Debian/Ubuntu/CentOS）
-- 📥 从GitHub或备用源下载安装脚本
-- ⚙️ 支持自定义端口、用户名和密码
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/socks5_install.sh)
-```
-
-**支持参数**:
-- `--port=<端口>` 指定SOCKS5端口
-- `--user=<用户名>` 指定认证用户名
-- `--passwd=<密码>` 指定认证密码
-- `--no-github` 使用备用下载源
-
-### 🛡️ install_ufw_cloudflare.sh - UFW防火墙Cloudflare配置
+### 🛡️ install_ufw_cloudflare.sh - UFW 防火墙 Cloudflare 白名单
 **脚本概述**:
 ```
 ╔════════════════════════════════════╗
@@ -311,347 +125,111 @@ bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/mai
 ╚════════════════════════════════════╝
 ```
 **功能**:
-- 🔥 自动安装和配置UFW防火墙
-- ☁️ 获取最新的Cloudflare IPv4/IPv6地址
-- 🔓 仅允许Cloudflare IP访问80/443端口
-- 🔑 自动开放SSH（22）端口
-- 🛡️ 默认拒绝其他入站连接
+- 🔍 **SSH 端口自适应放行**: 动态探测当前实际运行及配置的所有 SSH 端口并自动放行，彻底消除改非标端口后被防火墙关在门外的致命风险
+- ☁️ 获取官方最新的 Cloudflare IPv4/IPv6 地址白名单
+- 🔓 仅允许 Cloudflare 代理访问 80/443 端口，防御源站直接探测与攻击
+- 🛡️ 默认拒绝其他所有非授权入站流量，支持 `-y/--yes` 静默执行
 
 **使用方法**:
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/install_ufw_cloudflare.sh)
 ```
 
-### 🚫 block-ips.sh - 国家IP封禁工具
-**脚本概述**:
-```
-Linux VPS一键屏蔽指定国家所有的IP访问
-```
+---
+
+### 🧹 cleanup.sh - 系统垃圾深度清理加速器
 **功能**:
-- 🌍 根据国家代码封禁整个国家的IP段
-- 📋 使用ipset高效管理大量IP规则
-- 🔓 支持解封已封禁的国家IP
-- 📊 查看当前封禁列表
+- 🗄️ **systemd-journald 深度清理**: 保留最近 2 天或 50M 日志，极大释放 VPS 磁盘
+- 📦 **全发行版包缓存与残留清理**: 深度清理 Debian/Ubuntu (`apt autoremove --purge`)、RHEL/CentOS/Rocky/Fedora (`dnf/yum clean all`)、Arch (`pacman -Sc`)、Alpine (`apk cache clean`)
+- 📄 日志归档轮转清理与超大日志安全截断
+- 📊 准确统计清理前后磁盘使用率与释放空间
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/block-ips.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/cleanup.sh)
 ```
 
-**功能选项**:
-1. 封禁IP - 输入国家代码（如cn）进行封禁
-2. 解封IP - 输入国家代码进行解封
-3. 查看封禁列表 - 显示当前所有封禁规则
+---
 
-### 🐳 docker-ca.sh - Docker TLS证书自动配置
-**脚本概述**:
-```
-╭───────────────────────────╮
-│  Docker TLS 安全配置工具  │
-╰───────────────────────────╯
-```
+### 💫 swap.sh - Swap 分区管理工具
 **功能**:
-- 🔐 自动生成CA证书和服务器/客户端证书
-- 🌐 支持IP地址和域名的TLS配置
-- 🔄 自动配置证书续期定时任务（每15天检查）
-- 🛡️ 配置Docker守护进程使用TLS验证
-- 💾 自动备份原有配置
+- ➕ 一键添加 Swap 交换空间，自定义容量大小
+- ⚙️ **文件系统自适应**: 优先采用 `fallocate` 极速分配，在 XFS/Btrfs 等不支持空洞的文件系统上自动 fallback 到 `dd` 块写入，确保 100% 成功激活
+- 🚀 自动优化 `vm.swappiness=60` 并写入 `/etc/fstab` 实现开机持久化挂载
+- ➖ 一键彻底卸载并清理 Swap 分区
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/swap.sh)
+```
+
+---
+
+### 🌐 all_http_socks5.sh - HTTP 与 SOCKS5 代理一键部署
+**功能**:
+- 🌐 自动安装配置 Squid HTTP 代理（默认端口 25562）
+- 🔐 本地动态生成 `htpasswd` 凭证，摆脱外网下载密码文件的故障隐患
+- 🧦 自动部署 Dante SOCKS5 代理（默认端口 25543）
+- 📦 一键完成双代理部署与开机自启
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/all_http_socks5.sh)
+```
+
+---
+
+### 🌍 gost.sh - Gost 代理服务器管理
+**功能**:
+- 🚀 自动下载适配架构的最新或稳定版 Gost
+- ⚙️ 全面采用现代标准 `systemd` 托管服务 (`/etc/systemd/system/gost.service`)，摆脱淘汰的 SysVinit 与外部 Gist 下载依赖
+- 🔁 支持交互式可视化管理、多端口配置与链式代理转发
+
+**使用方法**:
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/gost.sh)
+```
+
+---
+
+### 🐳 docker-ca.sh - Docker TLS 证书安全配置
+**功能**:
+- 🔒 自动生成 4096 位 RSA CA 根证书与服务端/客户端双向验证证书
+- 🛡️ 采用 systemd drop-in (`/etc/systemd/system/docker.service.d/override.conf`) 规范挂载，不改动包管理器原装服务文件
+- 🔐 私钥赋予 `0400` 严格保护权限，防止凭据泄露
+- ⏰ 自动创建定时检查与续期任务
 
 **使用方法**:
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/docker/docker-ca.sh)
 ```
 
-### 💾 backup_postgres.sh - PostgreSQL自动备份工具
-**脚本概述**:
-```
-╔═══════════════════════════════════╗
-║  PostgreSQL 数据库自动化备份脚本  ║
-╚═══════════════════════════════════╝
-```
+---
+
+### 🇨🇳 LocaleCN.sh - 简体中文环境设置工具
 **功能**:
-- 🗄️ 使用pg_dump进行数据库备份
-- 🔐 通过.pgpass文件实现免密备份
-- 📅 生成带时间戳的备份文件
-- 📝 详细的执行日志记录
-- 🧹 自动清理指定天数前的旧备份
-- ⏰ 支持cron定时任务
+- 🇨🇳 一键设置系统全局语言环境为简体中文 (`zh_CN.UTF-8`)
+- 🖥️ 支持 CentOS、Debian、Ubuntu 等主流发行版并自动备份原有配置
 
 **使用方法**:
 ```bash
-# 1. 配置.pgpass文件（必需）
-echo "localhost:5432:数据库名:用户名:密码" > ~/.pgpass
-chmod 600 ~/.pgpass
-
-# 2. 编辑脚本中的配置参数
-# 3. 运行脚本
-bash /path/to/backup_postgres.sh
-
-# 4. 设置定时任务（可选）
-# crontab -e
-# 30 2 * * * /path/to/backup_postgres.sh > /dev/null 2>&1
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/LocaleCN.sh)
 ```
 
-### 📦 QLOneKeyDependency.sh - 青龙面板依赖一键安装
-**脚本概述**:
-```
-青龙面板依赖一键安装脚本
-```
+---
+
+### 🌐 nat64_optimizer.sh - NAT64/DNS64 自动优选工具
 **功能**:
-- 📚 自动安装青龙面板所需的Node.js依赖
-- 🐍 安装Python依赖包
-- 🎨 安装Canvas等图形处理库
-- 🔧 配置npm镜像源加速下载
-- 🚀 支持pnpm包管理器
+- 🔍 聚合抓取全球 NAT64/DNS64 节点并多模式智能测速 (ICMP/TCP53/DNS)
+- ⚙️ 自动写入最优配置到 `/etc/resolv.conf` 及 `systemd-resolved`
 
 **使用方法**:
 ```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/QLOneKeyDependency.sh)
+bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/nat64_optimizer.sh)
 ```
 
-**注意事项**:
-- 需要在青龙面板容器内执行
-- 确保已安装Node.js和npm
-- 安装完成后建议重启Docker容器
+---
 
-### 🌐 http_install.sh
-**脚本概述**:
-```
-HTTP代理自动配置工具
-```
-**功能**: 自动安装和配置Squid HTTP代理服务器
+## 📄 License
 
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/network/http_install.sh)
-```
-
-### 🔄 ChangeMirrors.sh
-**脚本概述**: 
-```
-┌─────────────────────────┐
-│     镜像源切换工具      │
-└─────────────────────────┘
-```
-**功能**: 自动切换系统软件源到更快的镜像
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/ChangeMirrors.sh)
-```
-
-### 🧼 clean_snap.sh - Snap包清理小工具
-**脚本概述**: 
-```
-Snap包清理小工具
-```
-**功能**: 
-- 🗑️ 删除系统中不再需要的旧版本snap包
-- 🛑 自动关闭所有snap应用后再清理
-- 📋 安全操作，避免影响正在运行的服务
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/system/clean_snap.sh)
-```
-
-**支持参数**:
-- `-h, --help`  help 显示帮助信息
-
-### 🐳 DockerInstallation.sh
-**脚本概述**: 
-```
-╭───────────────────╮
-│ Docker一键安装脚本 │
-╰───────────────────╯
-```
-**功能**: 自动安装和配置Docker环境
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/docker/DockerInstallation.sh)
-```
-
-### 🖥️ Network-Reinstall-System-Modify.sh
-**脚本概述**: 
-```
- _   _ _____ _____        _____  ____  
-| \ | | ____|_   _|      |  __ \|  _ \ 
-|  \| |  _|   | |  _____  | |  | | |_) |
-| . ` | |___  | | |_____| | |  | |  _ < 
-|_|\_\|_____| |_|         |_|  |_|_| \_\
-```
-**功能**: 通过网络一键重装各种Linux/Windows系统
-
-**使用方法**:
-```bash
-bash <(curl -sSL https://raw.githubusercontent.com/Silentely/Demo/refs/heads/main/Sh/utils/Network-Reinstall-System-Modify.sh)
-```
-
-## 📂 Work目录 - Cloudflare Workers脚本
-
-### 🌐 mirror.js - Docker镜像代理
-**功能**: 通过Cloudflare Workers代理Docker Hub，加速镜像拉取
-**使用**: 修改daemon.json添加`"registry-mirrors": ["https://你的域名"]`
-
-### 📱 wx.js - 企业微信推送
-**功能**: 企业微信消息推送服务，支持文本、图文、Markdown等多种格式
-
-### 🔐 tgapi.js - Telegram Bot API代理
-**功能**: 代理Telegram Bot API请求，解决访问限制
-
-### 🌉 proxy.js - 通用Web代理
-**功能**: 基于Cloudflare Workers的通用HTTP/HTTPS代理
-
-## 🐍 Python脚本
-
-### ⚔️ cc.py - Layer 7 DDoS测试工具
-**功能**: 支持CC、POST、Slowloris攻击模式，支持SOCKS4/5代理
-**⚠️ 警告**: 仅用于授权的安全测试，禁止攻击.gov网站
-
-## 📝 题库转换工具
-
-### 📚 convert_all_questions_motibang.py - 磨题帮格式转换
-**脚本概述**:
-```
-╭────────────────────────────────────╮
-│   多格式题库转换工具 - 磨题帮版   │
-╰────────────────────────────────────╯
-```
-**功能**:
-- 📄 支持多种输入格式：Excel (.xlsx)、Word (.docx)、旧版Word (.doc)、纯文本 (.txt)
-- 🔍 智能识别题型：单选、多选、判断、填空、简答
-- 🔢 自动规范化选项编号（支持ABCD/abcd/1234等格式）
-- 📊 输出标准化的磨题帮格式Excel文件
-- 🔄 批量处理整个文件夹
-
-**使用方法**:
-```bash
-cd tiku
-python convert_all_questions_motibang.py
-# 按提示输入源文件夹和目标文件夹路径
-```
-
-### 📖 convert_all_questions_shuatidadang.py - 刷题搭档格式转换
-**功能**:
-- 📄 与磨题帮版类似的多格式支持
-- 📊 输出刷题搭档APP兼容的标准格式
-- 🧹 自动清理全角/半角字符混用问题
-
-**使用方法**:
-```bash
-cd tiku
-python convert_all_questions_shuatidadang.py
-# 按提示输入源文件夹和目标文件夹路径
-```
-
-**依赖安装**:
-```bash
-pip install openpyxl python-docx olefile
-```
-
-## 🔧 GitHub Actions
-
-### 🐳 deploy-docker.yml - Docker镜像CI/CD
-**功能**: 自动构建Docker镜像并推送到Docker Hub，基于Git Tag管理版本
-
-### 🧹 Auto clean workflows.yml - 工作流日志清理
-**功能**: 每周自动清理5天前的GitHub Actions运行记录
-
-### 🔄 repo_sync.yml - 仓库同步
-**功能**: 自动从上游仓库同步代码，支持GitHub和Gitee双向同步
-
-### 📦 docker.yml - Docker多架构构建
-**功能**: 使用Docker Buildx构建多架构镜像（amd64/arm64），推送到Docker Hub
-
-## 🤖 AI上下文文档
-
-本项目包含完整的AI上下文索引文档（CLAUDE.md），用于帮助AI助手快速理解项目结构和代码逻辑。
-
-### 文档结构
-```
-Demo/
-├── CLAUDE.md                    # 根级索引（项目概览、架构图、模块索引）
-├── Sh/system/CLAUDE.md          # 系统工具模块文档
-├── Sh/network/CLAUDE.md         # 网络工具模块文档
-├── Sh/docker/CLAUDE.md          # Docker工具模块文档
-├── Sh/utils/CLAUDE.md           # 通用工具模块文档
-├── Work/CLAUDE.md               # Cloudflare Workers文档
-├── Action/CLAUDE.md             # GitHub Actions文档
-├── tiku/CLAUDE.md               # 题库转换工具文档
-└── lib/CLAUDE.md                # 公共库文档
-```
-
-### 特性
-- 📊 **Mermaid结构图**：可视化展示模块关系
-- 🔗 **导航面包屑**：支持模块间快速跳转
-- 📝 **详细接口说明**：每个脚本的参数、配置、示例
-- ❓ **FAQ**：常见问题解答
-
-## 📖 文档
-
-- [目录结构说明](docs/structure.md) - 详细介绍项目目录结构
-- [使用示例](docs/examples.md) - 各个脚本的详细使用示例
-- [贡献指南](docs/contributing.md) - 如何为项目贡献代码
-
-## 📊 脚本使用统计
-
-```
-# 使用频率统计 (仅供参考)
-statistics = {
-    # 系统工具
-    'nat64_optimizer.sh': '★★★★★',
-    'install-system-information.sh': '★★★★★',
-    'LocaleCN.sh': '★★★★★',
-    'cleanup.sh': '★★★★☆',
-    'terminal_optimizer.sh': '★★★★☆',
-    'swap.sh': '★★★☆☆',
-    'clean_snap.sh': '★☆☆☆☆',
-
-    # 网络工具
-    'all_http_socks5.sh': '★★☆☆☆',
-    'install_ufw_cloudflare.sh': '★★☆☆☆',
-    'dd-od.sh': '★★☆☆☆',
-    'gost.sh': '★★☆☆☆',
-    'http_install.sh': '★★☆☆☆',
-    'block-ips.sh': '★☆☆☆☆',
-
-    # Docker工具
-    'DockerInstallation.sh': '★★★☆☆',
-    'docker-ca.sh': '★★★☆☆',
-
-    # 通用工具
-    'ssh_key.sh': '★★★★☆',
-    'backup_postgres.sh': '★★★☆☆',
-    'ChangeMirrors.sh': '★★★☆☆',
-    'QLOneKeyDependency.sh': '★☆☆☆☆',
-    'Network-Reinstall-System-Modify.sh': '★☆☆☆☆',
-
-    # 题库转换 (新增)
-    'convert_all_questions_motibang.py': '★★★☆☆',
-    'convert_all_questions_shuatidadang.py': '★★☆☆☆'
-}
-```
-
-## 🤝 贡献
-
-欢迎提交 Pull Request 或 Issue。请查看 [贡献指南](docs/contributing.md) 了解详情。
-
-## License
-
-- 本项目的所有代码除另有说明外,均按照 [MIT License](LICENSE) 发布。
-- 本项目的README.MD，wiki等资源基于 [CC BY-NC-SA 4.0][CC-NC-SA-4.0] 这意味着你可以拷贝、并再发行本项目的内容，<br/>
-  但是你将必须同样**提供原作者信息以及协议声明**。同时你也**不能将本项目用于商业用途**，按照我们狭义的理解<br/>
-  (增加附属条款)，凡是**任何盈利的活动皆属于商业用途**。
-- 请在遵守当地相关法律法规的前提下使用本项目。
-
-<p align="center">
-  <img src="https://github.com/docker/dockercraft/raw/master/docs/img/contribute.png?raw=true" alt="贡献图示">
-</p>
-
-[github-hosts]: https://raw.githubusercontent.com/racaljk/hosts/master/hosts "hosts on Github"
-[CC-NC-SA-4.0]: https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh
-
-<div align="center">
-  <sub>Made with ❤️ by <a href="https://github.com/Silentely">Silentely</a></sub>
-</div>
+本项目基于 [MIT](LICENSE) 许可证开源。
