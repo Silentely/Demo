@@ -52,7 +52,7 @@ set_github_mirror() {
     GITHUB_URL_PREFIX=""
     if [ "$country_code" == "CN" ]; then
         echo -e "${YELLOW}⚠️  检测到您在中国大陆，将使用镜像加速下载...${NC}"
-        GITHUB_URL_PREFIX="https://git.99886655.xyz/"
+        GITHUB_URL_PREFIX="https://ghfast.top/"
     else
         echo -e "${GREEN}✅ 将使用 GitHub 官方源进行下载。${NC}"
     fi
